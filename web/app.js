@@ -544,13 +544,13 @@ function render(r, ctx) {
   $('data-warn').innerHTML = ctx.warns.map(esc).join('<br>');
   $('sun').innerHTML = (r.sunNote ? `<div class="alert">☀ ${esc(r.sunNote)}</div>` : '')
     + r.sun.map((s) => `<div class="s"><b>${esc(s.segment)}</b><span>${esc(s.name)}</span><span>일출 ${esc(kstStr(s.sunrise))} · 일몰 ${esc(kstStr(s.sunset))}</span></div>`).join('');
-  $('legs').innerHTML = r.legs.length > 1 || r.totalStayMin ? r.legs.map((l, i) => `<tr><td>${esc(l.from)} → ${esc(l.to)}</td><td>${l.distanceKm}km</td><td>${l.durationMin}분</td>
-    <td>${esc(kstStr(l.departUtc))}${i > 0 && r.points[i].stayMin ? ` <small>(체류 ${r.points[i].stayMin}분)</small>` : ''}</td><td>${esc(kstStr(l.arriveUtc))}</td></tr>`).join('') : '';
+  $('legs').innerHTML = r.legs.length > 1 || r.totalStayMin ? r.legs.map((l, i) => `<tr><td data-l="구간">${esc(l.from)} → ${esc(l.to)}</td><td data-l="거리">${l.distanceKm}km</td><td data-l="소요">${l.durationMin}분</td>
+    <td data-l="출발">${esc(kstStr(l.departUtc))}${i > 0 && r.points[i].stayMin ? ` <small>(체류 ${r.points[i].stayMin}분)</small>` : ''}</td><td data-l="도착">${esc(kstStr(l.arriveUtc))}</td></tr>`).join('') : '';
 
   $('rows').innerHTML = r.rows.map((x) => `<tr class="${x.grade}">
-    <td>${esc(x.segment)}</td><td>${esc(x.item)}</td><td>${esc(x.value)}</td><td>${esc(x.limit)}</td>
-    <td><span class="badge ${x.grade}">${esc(GRADE_TEXT[x.grade])}</span>${x.note ? `<div class="note">${esc(x.note)}</div>` : ''}</td>
-    <td class="note">${esc(x.source)}${x.obsTime ? ' · ' + esc(kstStr(x.obsTime)) : ''}</td></tr>`).join('');
+    <td data-l="구간">${esc(x.segment)}</td><td data-l="항목">${esc(x.item)}</td><td data-l="값">${esc(x.value)}</td><td data-l="기준">${esc(x.limit)}</td>
+    <td data-l="판정"><span class="badge ${x.grade}">${esc(GRADE_TEXT[x.grade])}</span>${x.note ? `<div class="note">${esc(x.note)}</div>` : ''}</td>
+    <td class="note" data-l="출처">${esc(x.source)}${x.obsTime ? ' · ' + esc(kstStr(x.obsTime)) : ''}</td></tr>`).join('');
 
   $('wind').innerHTML = r.wind.map((w) => `<div class="card"><small>${esc(w.segment)} · ${esc(w.name)}</small>
     <div class="v">${w.windMs === null ? '-' : `<span class="arrow" style="transform:rotate(${(w.windDir ?? 0) + 180}deg)">↑</span> ${esc(dirText(w.windDir))} ${esc(w.windMs)}m/s`}</div>

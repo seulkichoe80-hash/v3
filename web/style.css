@@ -190,3 +190,21 @@ body.coords-on .place .loc { display: none; }
 .raw { margin-top: 10px; font-size: 12px; }
 .raw summary { cursor: pointer; color: var(--accent); }
 .raw pre { white-space: pre-wrap; font: 11px/1.4 var(--mono); max-height: 240px; overflow: auto; background: #f4f6f8; padding: 8px; border-radius: 6px; }
+
+/* 폰: 표를 카드로 바꿔 판정이 잘리지 않게 한다 */
+@media (max-width: 760px) {
+  .table-wrap table, .table-wrap tbody { display: block; width: 100%; }
+  .table-wrap thead { display: none; }
+  .table-wrap tr { display: flex; flex-wrap: wrap; gap: 2px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; padding: 6px 10px; background: #fff; }
+  .table-wrap tr.RED { border-color: var(--red); }
+  .table-wrap td { display: flex; gap: 4px; border: 0; padding: 0; align-items: baseline; flex: none; max-width: 100%; overflow-wrap: anywhere; }
+  .table-wrap td::before { content: attr(data-l); color: var(--muted); font-size: 11px; }
+  .badge { flex: none; white-space: nowrap; min-width: 0; }
+  #rows td[data-l="판정"] { order: -2; flex: 1 0 100%; display: block; font-size: 13px; }
+  #rows td[data-l="판정"]::before, #rows td[data-l="구간"]::before, #rows td[data-l="항목"]::before { display: none; }
+  #rows td[data-l="판정"] .note { margin-top: 2px; }
+  #rows td[data-l="구간"], #rows td[data-l="항목"] { order: -1; font-weight: 700; }
+  #rows td[data-l="출처"] { order: 3; flex: 1 0 100%; font-size: 11px; }
+  .legs-wrap td[data-l="구간"] { flex-basis: 100%; font-weight: 700; }
+  .legs-wrap td[data-l="구간"]::before { display: none; }
+}
