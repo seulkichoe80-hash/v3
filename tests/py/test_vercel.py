@@ -45,3 +45,13 @@ class T(unittest.TestCase):
         self.assertTrue(hasattr(m, 'handler'))
 
 if __name__ == '__main__': unittest.main()
+
+class Raw(unittest.TestCase):
+    def test_raw_masks_key_and_limits(self):
+        st, h, b = call('GET', '/api/raw/warn')
+        self.assertEqual(st, 200); s = b.decode()
+        self.assertNotIn(KEY, s); self.assertIn('REG_UP', s); self.assertLessEqual(len(json.loads(s)['body']), 4000)
+    def test_raw_requires_code(self):
+        self.assertEqual(call('GET', '/api/raw/warn', code='1234')[0], 401)
+    def test_raw_unknown(self):
+        self.assertEqual(call('GET', '/api/raw/zzz')[0], 404)

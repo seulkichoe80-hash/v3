@@ -32,6 +32,12 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
         given = _hdr(headers, 'X-Access-Code') or ''
         if not hmac.compare_digest(given.encode('utf-8'), access_code.encode('utf-8')):
             return _json(401, {'error': '접속코드가 필요합니다'})
+    if method == 'GET' and path.startswith('/api/raw/'):
+        from .kma import ENDPOINTS
+        kind = path[len('/api/raw/'):]
+        if kind in ENDPOINTS:
+            return _json(200, client.raw(kind))
+        return _json(404, {'error': 'unknown api'})
     if method == 'GET' and path.startswith('/api/'):
         kind = path[5:]
         if kind in KINDS:
