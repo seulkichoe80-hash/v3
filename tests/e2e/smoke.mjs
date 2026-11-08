@@ -99,6 +99,16 @@ if (!['RED', 'YELLOW', 'GREEN', 'NA'].includes(grade)) fail('등급 이상: ' + 
 if (!notamList.includes('D2840/26')) fail('NOTAM 목록에 D2840/26 없음');
 if (!report.includes('D2840/26')) fail('보고문에 D2840/26 없음');
 if (!/일몰 \d\d:\d\d/.test(report)) fail('보고문에 일몰 없음');
+if (!/\d+kt\)/.test(await page.textContent('#wind')) && !/바람 정보 없음|주변 관측 없음/.test(await page.textContent('#wind'))) fail('바람 카드에 kt 병기 없음');
+await page.click('#criteria-wrap summary');
+const crit = await page.textContent('#criteria');
+if (!/규정/.test(crit) || !/시스템 설정값/.test(crit) || !/3200m/.test(crit) || !/1\.5배/.test(crit)) fail('판정 기준표 내용 이상');
+// 제22조 확인표: 야간 또는 해상(지도 없으면 엄격 기준=해상)일 때 표시
+if (!(await page.textContent('#art22')).includes('제22조④')) fail('해상 제22조 확인표 없음');
+await page.selectOption('#landsea', 'land'); await page.selectOption('#daynight', 'day'); await page.click('#run');
+await page.waitForFunction(() => document.querySelector('#art22').textContent.trim() === '', null, { timeout: 5000 }).catch(() => fail('주간·육상이면 제22조 확인표가 비어야 함'));
+await page.selectOption('#daynight', 'night'); await page.click('#run');
+await page.waitForFunction(() => /야간투시경/.test(document.querySelector('#art22').textContent), null, { timeout: 5000 }).catch(() => fail('야간 제22조 확인표 없음'));
 if (!/일출/.test(await page.textContent('#sun'))) fail('일출·일몰 표시 없음');
 if (!report.includes('경유A') || !report.includes('체류 10분')) fail('보고문에 경유지·체류 없음: ' + report);
 if (!(await page.textContent('#rows')).includes('경유지1')) fail('근거 표에 경유지1 없음');

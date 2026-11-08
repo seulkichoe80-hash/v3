@@ -3,6 +3,7 @@ import { distanceKm, sampleRouteMulti, isNightDuringRoute, routeLengthKm, KM_PER
 import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
 import { evaluate, GRADE_TEXT, dirText, SIGWX_TEXT } from './judge.js';
+import { criteriaTable, art22Items } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
 const KINDS = ['metar', 'taf', 'asos', 'aws', 'warn', 'lightning', 'sigwx'];
@@ -553,8 +554,8 @@ function render(r, ctx) {
     <td class="note" data-l="출처">${esc(x.source)}${x.obsTime ? ' · ' + esc(kstStr(x.obsTime)) : ''}</td></tr>`).join('');
 
   $('wind').innerHTML = r.wind.map((w) => `<div class="card"><small>${esc(w.segment)} · ${esc(w.name)}</small>
-    <div class="v">${w.windMs === null ? '-' : `<span class="arrow" style="transform:rotate(${(w.windDir ?? 0) + 180}deg)">↑</span> ${esc(dirText(w.windDir))} ${esc(w.windMs)}m/s`}</div>
-    <small>순간최대 ${w.gustMs ?? '-'}m/s${w.trend ? ' · 10분 추세 ' + esc(w.trend) : ''}${w.obsTime ? ' · ' + esc(kstStr(w.obsTime)) : ''}</small></div>`).join('');
+    <div class="v">${w.windMs === null ? '-' : `<span class="arrow" style="transform:rotate(${(w.windDir ?? 0) + 180}deg)">↑</span> ${esc(dirText(w.windDir))} ${esc(w.windMs)}m/s <small>(${esc(w.windKt)}kt)</small>`}</div>
+    <small>순간최대 ${w.gustMs ?? '-'}m/s${w.gustKt !== null && w.gustKt !== undefined ? ` (${w.gustKt}kt)` : ''}${w.trend ? ' · 10분 추세 ' + esc(w.trend) : ''}${w.obsTime ? ' · ' + esc(kstStr(w.obsTime)) : ''}</small></div>`).join('');
 
   const inScope = r.notams.filter((n) => n.inScope).sort((a, b) => (a.distanceNm ?? 1e9) - (b.distanceNm ?? 1e9));
   const out = r.notams.length - inScope.length;
@@ -570,6 +571,14 @@ function render(r, ctx) {
     + (out ? `<p class="hint">확인 대상 아님(D 시리즈 외) ${out}건</p>` : '');
 
   $('report-text').value = r.reportText;
+  const g22 = art22Items({ isNight: ctx.isNight, isSea: ctx.isSea });
+  $('art22').innerHTML = g22.length ? `<details open class="a22"><summary>제22조 특수조건 확인 <small>(규정 원문 · 판정에는 반영되지 않음)</small></summary>`
+    + g22.map((g) => `<div class="g"><b>${esc(g.title)}</b><ul>${g.items.map((x) => `<li><label><input type="checkbox"> ${esc(x)}</label></li>`).join('')}</ul>${g.proviso ? `<p class="hint">※ ${esc(g.proviso)}</p>` : ''}</div>`).join('')
+    + (ctx.isSea && !state.kakao ? '<p class="hint">※ 지도가 없어 해상 기준을 적용 중입니다. 육상 비행이면 [육상/해상]에서 "육상"을 선택하세요.</p>' : '') + '</details>' : '';
+  const ct = criteriaTable(state.config);
+  const rowsHtml = (list) => list.map((x) => `<tr><th>${esc(x.label)}</th><td>${esc(x.value)}${x.basis ? ` <small>(${esc(x.basis)})</small>` : ''}</td></tr>`).join('');
+  $('criteria').innerHTML = `<h4>규정 조문 (119항공대 운영 규정)</h4><table class="kv">${rowsHtml(ct.regulation)}</table>
+    <h4>시스템 설정값 <small>(규정이 아니라 보수적으로 정한 운영 설정 — config.json에서 변경)</small></h4><table class="kv">${rowsHtml(ct.settings)}</table>`;
   $('sigwx-raw-wrap').hidden = false;
 }
 

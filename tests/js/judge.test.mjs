@@ -210,3 +210,16 @@ test('SIGWX: 해당 없음 → 가능 / 자료 수신 실패·해석 0건 → �
   assert.equal(evaluate(base({ data: { ...base().data, sigwx: [] } })).rows.find((x) => x.item === '저고도 중요기상').grade, 'NA');
   assert.equal(evaluate(base({ dataStatus: { sigwx: 'error' }, data: { ...base().data, sigwx: [] } })).rows.find((x) => x.item === '저고도 중요기상').grade, 'NA');
 });
+// ---- kt 병기, 제22조 안내 ----
+test('바람: m/s와 kt 함께', () => {
+  const aws = [{ stn: '400', name: '강남', lat: 37.55, lon: 126.97, obsTime: iso(3), windDir: 300, windMs: 6.5, gustMs: 10, windMs10ago: 6 }];
+  const r = evaluate(base({ data: { ...base().data, aws } }));
+  const w = r.wind.find((x) => x.segment === '목적지');
+  assert.equal(w.windKt, 13); assert.equal(w.gustKt, 19);
+  assert.match(r.reportText, /6\.5m\/s\(13kt\)/); assert.match(r.reportText, /순간 10m\/s\(19kt\)/);
+});
+test('보고문에 제22조 확인 안내(야간·해상일 때만)', () => {
+  const day = evaluate(base()).reportText; assert.ok(!/제22조/.test(day));
+  const night = evaluate(base({ isNight: true })).reportText; assert.match(night, /제22조① 야간 조건 확인/);
+  const sea = evaluate(base({ isSea: true })).reportText; assert.match(sea, /제22조④ 해상 조건 확인/);
+});

@@ -1,6 +1,7 @@
 // 119항공대 운영 규정 제21조 기준 판정 엔진 (순수 함수). 시스템은 조언만 하며 최종 판단은 통제관·기장.
 import { distanceKm, pointToRouteKm, sunTimesLocal, routeIntersectsPolygon, KM_PER_NM } from './geo.js';
 import { assessNotamRoute } from './notam.js';
+import { msToKt } from './rules.js';
 
 export const PROVISO = '제21조① 단서 — 긴급운항 시 즉시 통제관 보고, 기종별 교범 운용한계 내에서 조종사 의견 청취 후 통제관 판단';
 const RANK = { RED: 3, YELLOW: 2, NA: 1, GREEN: 0 };
@@ -159,15 +160,15 @@ function windInfo(segment, p, aws, metars, now, config) {
   const a = nearest(fresh, p, 30);
   if (a) {
     const d = a.windMs10ago === null || a.windMs10ago === undefined || a.windMs === null ? null : a.windMs - a.windMs10ago;
-    return { segment, stn: a.stn, name: `AWS ${a.name}`, windDir: a.windDir, windMs: a.windMs, gustMs: a.gustMs,
+    return { segment, stn: a.stn, name: `AWS ${a.name}`, windDir: a.windDir, windMs: a.windMs, gustMs: a.gustMs, windKt: msToKt(a.windMs), gustKt: msToKt(a.gustMs),
       trend: d === null ? null : d >= 2 ? '증가' : d <= -2 ? '감소' : '유지', obsTime: a.obsTime };
   }
   const m = nearest(metars.filter((x) => ageMin(x.obsTime, now) <= config.freshnessMin.metar), p, config.radius.metarNm * KM_PER_NM);
   if (m) {
     const kt2ms = (k) => (k === null || k === undefined ? null : Math.round(k * 0.5144 * 10) / 10);
-    return { segment, stn: m.icao, name: `METAR ${m.name}`, windDir: m.windDir, windMs: kt2ms(m.windKt), gustMs: kt2ms(m.gustKt), trend: null, obsTime: m.obsTime };
+    return { segment, stn: m.icao, name: `METAR ${m.name}`, windDir: m.windDir, windMs: kt2ms(m.windKt), gustMs: kt2ms(m.gustKt), windKt: m.windKt ?? null, gustKt: m.gustKt ?? null, trend: null, obsTime: m.obsTime };
   }
-  return { segment, stn: null, name: '주변 관측 없음', windDir: null, windMs: null, gustMs: null, trend: null, obsTime: null };
+  return { segment, stn: null, name: '주변 관측 없음', windDir: null, windMs: null, gustMs: null, windKt: null, gustKt: null, trend: null, obsTime: null };
 }
 
 export function evaluate(input) {
@@ -265,6 +266,8 @@ function buildReport(r, input) {
     parts.push(`${x.item}${x.segment !== '경로' ? '(' + x.segment + ')' : ''} ${x.value}${x.note ? ' — ' + x.note : ''}`);
   }
   const w = r.wind.find((x) => x.segment === '목적지');
-  if (w && w.windMs !== null) parts.push(`바람(목적지) ${dirText(w.windDir)} ${w.windMs}m/s${w.gustMs ? ' 순간 ' + w.gustMs + 'm/s' : ''}${w.trend ? ' ' + w.trend : ''}`);
+  if (w && w.windMs !== null) parts.push(`바람(목적지) ${dirText(w.windDir)} ${w.windMs}m/s(${w.windKt}kt)${w.gustMs ? ' 순간 ' + w.gustMs + 'm/s(' + w.gustKt + 'kt)' : ''}${w.trend ? ' ' + w.trend : ''}`);
+  if (isNight) parts.push('제22조① 야간 조건 확인(착륙장 조명, 수색구조 시 야간투시경 등)');
+  if (isSea) parts.push('제22조④ 해상 조건 확인(구명조끼·체온보호슈트·해상생환교육 등)');
   return parts.join(' | ');
 }

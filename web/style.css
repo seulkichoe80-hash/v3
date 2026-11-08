@@ -208,3 +208,18 @@ body.coords-on .place .loc { display: none; }
   .legs-wrap td[data-l="구간"] { flex-basis: 100%; font-weight: 700; }
   .legs-wrap td[data-l="구간"]::before { display: none; }
 }
+
+.art22 { margin-top: 10px; }
+.a22 { border: 1px solid var(--yellow-dot); background: var(--yellow-bg); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+.a22 summary { cursor: pointer; font-weight: 700; }
+.a22 .g { margin-top: 6px; } .a22 ul { margin: 4px 0; padding-left: 4px; list-style: none; } .a22 li { margin: 2px 0; }
+#criteria h4 { margin: 8px 0 4px; font-size: 12px; }
+table.kv { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.kv th { width: 92px; text-align: left; vertical-align: top; color: var(--muted); font-weight: 600; padding: 3px 6px 3px 0; border-bottom: 1px solid #edf0f3; }
+table.kv td { padding: 3px 0; border-bottom: 1px solid #edf0f3; }
+@media (max-width: 760px) { table.kv, table.kv tbody, table.kv tr, table.kv th, table.kv td { display: block; width: 100%; } table.kv th { padding-bottom: 0; border: 0; } }
+.a22 label { display: flex; gap: 6px; align-items: flex-start; font-weight: 400; color: var(--ink); font-size: 12px; }
+.a22 input[type="checkbox"] { width: auto; flex: none; margin: 2px 0 0; padding: 0; }
+table.kv { table-layout: fixed; }
+table.kv td, table.kv th { overflow-wrap: anywhere; }
+table.kv td { white-space: normal; }
