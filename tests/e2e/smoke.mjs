@@ -116,6 +116,8 @@ if (!(await page.textContent('#rows')).includes('경유지1')) fail('근거 표�
 if (!(await page.textContent('#rows')).includes('저고도 중요기상')) fail('근거 표에 저고도 중요기상 없음');
 await page.click('#sigwx-raw-wrap summary');
 await page.waitForFunction(() => /ICE|MOD_ICE/.test(document.querySelector('#sigwx-raw').textContent), null, { timeout: 5000 }).catch(() => fail('SIGWX 원문 보기 안 됨'));
+await page.click('#sigwx-help-btn');
+await page.waitForFunction(() => document.querySelector('#sigwx-raw').dataset.mode === 'help' && document.querySelector('#sigwx-raw').textContent.length > 5, null, { timeout: 5000 }).catch(() => fail('SIGWX API 설명문 보기 안 됨'));
 if ((await page.locator('#legs tr').count()) !== 2) fail('구간표 2행 아님');
 if ((await page.locator('#rows tr').count()) < 6) fail('근거 표 행 부족');
 if (!(await page.textContent('#landsea-auto')).includes('해상 기준')) fail('지도 없음 시 해상(엄격) 기준 안내 없음');

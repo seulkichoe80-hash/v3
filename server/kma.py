@@ -156,8 +156,8 @@ class KmaClient:
     def raw(self, kind, limit=4000, icao='RKSS', help=False):
         """점검용: 기상청 원본 응답 앞부분(인증키 가림)."""
         url = self._url(kind, icao=icao if icao.isalnum() else 'RKSS')
-        if help:
-            url = url.replace('help=0', 'help=1')
+        if help:   # 설명문 요청: 다른 변수 없이 help=1과 인증키만 보낸다(변수가 틀려도 설명문은 받을 수 있게)
+            url = url.split('?')[0] + '?help=1&authKey=' + self.key
         mask = (lambda s: s.replace(self.key, '****')) if self.key else (lambda s: s)
         try:
             body = self.fetch(url, timeout=self.timeout)

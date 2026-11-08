@@ -223,3 +223,4 @@ table.kv td { padding: 3px 0; border-bottom: 1px solid #edf0f3; }
 table.kv { table-layout: fixed; }
 table.kv td, table.kv th { overflow-wrap: anywhere; }
 table.kv td { white-space: normal; }
+.rawbtns { margin: 6px 0; display: flex; gap: 6px; flex-wrap: wrap; }

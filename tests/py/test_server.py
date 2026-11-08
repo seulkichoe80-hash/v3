@@ -120,3 +120,14 @@ class SigwxRequest(unittest.TestCase):
         def f(url, timeout=5): return 'SIGWX 자료 형식이 다른 응답 (주석 줄 없음)\n1 2 3'
         r = KmaClient(KEY, CONFIG, fetch=f, now=Clock()).get('sigwx')
         self.assertEqual(r['items'], []); self.assertIsNone(r['error'])     # 해석 불가는 '수신 실패'가 아니라 '해석 불가'로 표시
+
+class SigwxHelpView(unittest.TestCase):
+    def test_help_mode_sends_only_help_and_key(self):
+        seen = []
+        def f(url, timeout=5): seen.append(url); return '설명문'
+        c = KmaClient(KEY, CONFIG, fetch=f, now=Clock())
+        r = c.raw('sigwx', help=True)
+        u = seen[-1]
+        self.assertIn('amo_sigwx.php?help=1', u); self.assertNotIn('tm=', u); self.assertIn('authKey=' + KEY, u)
+        self.assertNotIn(KEY, json.dumps(r, ensure_ascii=False))           # 응답에서는 키가 가려짐
+        c.raw('sigwx'); self.assertIn('tm=', seen[-1]); self.assertIn('help=0', seen[-1])   # 일반 모드는 그대로
