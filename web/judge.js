@@ -110,7 +110,9 @@ const sggKey = (s) => String(s || '').split(' ')[0].replace(/(시|군|구)$/, ''
 function warnRows(warns, regions, status, regionsAvailable, seaRoute) {
   if (status === 'error') return [{ segment: '경로', item: '기상특보', value: '-', limit: '발효 없음', grade: 'NA', source: '기상청 특보', obsTime: null, note: '특보 자료 수신 실패 — 직접 확인' }];
   const active = warns.filter((w) => !/해제/.test(w.cmd || ''));
-  const isCritical = (w) => CRITICAL_WARN.includes(w.kind) && /주의보|경보/.test(w.level || '');
+  // 등급 표기는 "예비 / 주의(보) / 경보". '예비'는 위험 특보가 아니다.
+  const isCritical = (w) => CRITICAL_WARN.includes(w.kind) && /주의|경보/.test(w.level || '');
+  const isSeaZone = (w) => /바다|해상|연안/.test(`${w.regName || ''}${w.regUpName || ''}`);
   if (!regionsAvailable) {
     const crit = active.filter(isCritical);
     if (!crit.length) return [{ segment: '경로', item: '기상특보', value: '전국 주요 특보 없음', limit: '발효 없음', grade: 'GREEN', source: '기상청 특보', obsTime: null, note: '' }];
@@ -119,10 +121,12 @@ function warnRows(warns, regions, status, regionsAvailable, seaRoute) {
   }
   const rows = [];
   for (const w of active) {
-    const critical = CRITICAL_WARN.includes(w.kind) && /주의보|경보/.test(w.level || '');
-    const exact = regions.some((r) => { const k = sggKey(r.sigungu); return k.length >= 2 && String(w.regName || '').includes(k); });
-    const sido = regions.some((r) => sidoKey(r.sido) && sidoKey(r.sido) === sidoKey(w.regUpName));
-    const seaZone = seaRoute && critical && /바다|해상|연안/.test(w.regName || '');
+    const critical = isCritical(w);
+    const sea = isSeaZone(w);
+    // 바다 구역 이름에는 시군구 이름이 글자로 섞여 들어갈 수 있다(예: '중부안쪽먼바다' ⊃ '부안'). 육지 구역일 때만 시군구와 맞춘다.
+    const exact = !sea && regions.some((r) => { const k = sggKey(r.sigungu); return k.length >= 2 && String(w.regName || '').includes(k); });
+    const sido = !sea && regions.some((r) => sidoKey(r.sido) && sidoKey(r.sido) === sidoKey(w.regUpName));
+    const seaZone = seaRoute && critical && sea;
     let grade = null, note = '';
     if (exact) { grade = critical ? 'RED' : 'YELLOW'; note = critical ? '경로·목적지 특보구역 발효(제21조①4)' : '참고 특보 발효'; }
     else if (sido && critical) { grade = 'YELLOW'; note = '같은 시·도 특보 — 특보구역 확인 필요'; }
@@ -152,11 +156,26 @@ function sigwxRow(items, route, input) {
   if (st === 'error' || st === 'stale') return { ...base, value: '-', grade: 'NA', note: '저고도 SIGWX 수신 실패 — 항공기상청 직접 확인' };
   if (!items || !items.length) return { ...base, value: '-', grade: 'NA', note: '저고도 SIGWX 해석 불가 또는 자료 없음 — 원문 확인' };
   const issued = items.map((x) => x.issued).filter(Boolean).sort().pop() || null;
-  const hits = items.filter((x) => x.kind !== 'FZL' && routeIntersectsPolygon(route, x.points));
-  if (!hits.length) return { ...base, value: `경로 해당 없음 (${items.length}개 요소)`, grade: 'GREEN', obsTime: issued, note: '' };
-  const kinds = [...new Set(hits.map((x) => SIGWX_TEXT[x.kind] || x.kind))];
-  return { ...base, value: `경로 통과: ${kinds.join('·')}`, grade: 'YELLOW', obsTime: issued,
-    note: hits.some((x) => x.kind === 'ICE') ? '착빙 예상 구역 — 회피 검토(제21조④)' : hits.some((x) => x.kind === 'TURB') ? '난류 예상 구역 — 조종사 판단(제21조⑥)' : '저고도 위험기상 구역 — 경로 검토' };
+  const fzl = items.find((x) => x.kind === 'FZL' && x.fzlFt);
+  const fzlText = fzl ? ` · 0℃ 고도 약 ${fzl.fzlFt}ft` : '';
+  // 위험구역: 착빙·난류 등. 닫힌 도형이 아닌 선(전선·제트기류 등)은 구역이 아니므로 제외한다.
+  const isHazard = (x) => ['ICE', 'TURB', 'MTN', 'VIS', 'TS', 'CLD'].includes(x.kind) || (x.kind === 'ETC' && x.closed !== false);
+  const hazards = items.filter(isHazard);
+  const checkable = hazards.filter((x) => (x.points || []).length >= 3);
+  const unlocated = hazards.filter((x) => (x.points || []).length < 3);
+  const hits = checkable.filter((x) => routeIntersectsPolygon(route, x.points));
+  const kinds = (list) => { const c = {}; list.forEach((x) => { const t = SIGWX_TEXT[x.kind] || x.kind; c[t] = (c[t] || 0) + 1; }); return Object.entries(c).map(([k, v]) => `${k} ${v}`).join('·'); };
+  if (hits.length) {
+    const names = [...new Set(hits.map((x) => SIGWX_TEXT[x.kind] || x.kind))];
+    return { ...base, value: `경로 통과: ${names.join('·')}${fzlText}`, grade: 'YELLOW', obsTime: issued,
+      note: hits.some((x) => x.kind === 'ICE') ? '착빙 예상 구역 — 회피 검토(제21조④)' : hits.some((x) => x.kind === 'TURB') ? '난류 예상 구역 — 조종사 판단(제21조⑥)' : '저고도 위험기상 구역 — 경로 검토' };
+  }
+  if (unlocated.length) {
+    return { ...base, value: `발표 ${hazards.length}건(${kinds(hazards)})${fzlText}`, grade: 'NA', obsTime: issued,
+      note: '위치를 경도·위도로 해석할 수 없어 경로 교차는 판정하지 않음 — 항공기상청 저고도 SIGWX 차트 직접 확인' };
+  }
+  if (!hazards.length) return { ...base, value: `위험구역 발표 없음${fzlText}`, grade: 'GREEN', obsTime: issued, note: '' };
+  return { ...base, value: `경로 해당 없음 (${hazards.length}개 구역)${fzlText}`, grade: 'GREEN', obsTime: issued, note: '' };
 }
 
 function windInfo(segment, p, aws, metars, now, config) {

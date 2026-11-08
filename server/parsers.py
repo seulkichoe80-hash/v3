@@ -459,7 +459,7 @@ def parse_taf_iwxxm(xml, airports):
 SIGWX_KIND = [('ICE', ('ICE', 'ICING', '착빙')), ('TURB', ('TURB', '난류', '난기류')),
               ('MTN', ('MT OBSC', 'MTW', 'MOUNTAIN', '산악')), ('VIS', ('VIS', '시정', 'FG', 'BR', '안개', 'HZ')),
               ('TS', ('CB', 'TS', '뇌우', '적란운')), ('CLD', ('CLD', 'BKN', 'OVC', '구름')),
-              ('FZL', ('FZLVL', 'FRZ', '결빙고도', '0°C', '0도'))]
+              ('FZL', ('FZLVL', 'FRZ', 'FREEZING', '결빙고도', '0°C', '0℃', '0도'))]
 
 
 def _sigwx_kind(label):
@@ -499,8 +499,8 @@ def _parse_sigwx_lines(text):
     return [groups[k] for k in order]
 
 
-def _latlon_pairs(v):
-    """pt 값에서 (위도, 경도) 쌍을 뽑는다. 문자열·[[a,b],…]·[{lat,lon}|{x,y},…]·[a,b,a,b…] 지원. 한반도 범위가 아니면 버린다(지도 좌표 등)."""
+def _raw_pairs(v):
+    """pt 값에서 숫자 쌍 (a, b)을 모은다(범위 검사 없음). 문자열·[[a,b],…]·[{lat,lon}|{x,y},…]·[a,b,a,b…] 지원."""
     raw = []
     if isinstance(v, str):
         nums = [float(x) for x in re.findall(r'-?\d+(?:\.\d+)?', v)]
@@ -517,9 +517,14 @@ def _latlon_pairs(v):
                     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
                         raw.append((a, b))
                 elif isinstance(x, str):
-                    raw += _latlon_pairs(x)
+                    raw += _raw_pairs(x)
+    return raw
+
+
+def _latlon_pairs(v):
+    """(위도, 경도) 쌍만 남긴다. 한반도 범위(위도 30~45, 경도 115~135)가 아니면 버린다(화면 좌표 등). 경도·위도 순서도 범위로 구분."""
     out = []
-    for a, b in raw:
+    for a, b in _raw_pairs(v):
         if 30 <= a <= 45 and 115 <= b <= 135:
             out.append({'lat': float(a), 'lon': float(b)})
         elif 115 <= a <= 135 and 30 <= b <= 45:
@@ -539,6 +544,87 @@ def _walk_sigwx(o, found):
             _walk_sigwx(v, found)
 
 
+def _xml_point_values(el):
+    """item 안에서 위치 값을 모은다: pt 속성, <pt>/<point> 등의 텍스트·x/y(lat/lon) 속성."""
+    vals = []
+    if el.attrib.get('pt'):
+        vals.append(el.attrib['pt'])
+    for d in el.iter():
+        if d is el:
+            continue
+        if _ln(d.tag).lower() in ('pt', 'point', 'p', 'pos', 'position', 'coord', 'latlon', 'lonlat'):
+            a = {k.lower(): v for k, v in d.attrib.items()}
+            la, lo = a.get('lat') or a.get('y'), a.get('lon') or a.get('lng') or a.get('x')
+            txt = (d.text or '').strip()
+            if la is not None and lo is not None:
+                try:
+                    vals.append([float(la), float(lo)])
+                except ValueError:
+                    pass
+            elif txt:
+                vals.append(txt)
+            elif a:
+                vals.append(' '.join(a.values()))
+    return vals
+
+
+def _xml_items(root):
+    return [e for e in root.iter() if _ln(e.tag) == 'item' and any(k in e.attrib for k in ('item_type', 'contour_name', 'label', 'item_name'))]
+
+
+def _parse_sigwx_xml(src, iso_issued):
+    try:
+        root = _ET.fromstring(src)
+    except _ET.ParseError:
+        return []
+    out = []
+    for e in _xml_items(root):
+        a = e.attrib
+        label = ' '.join(str(a.get(k) or '') for k in ('item_name', 'label')).strip()
+        name = str(a.get('contour_name') or '')
+        kind = _sigwx_kind(f"{name} {label} {a.get('item_type') or ''}" if not label and not name else f"{name} {label}")
+        pts = _latlon_pairs(_xml_point_values(e))
+        it = {'kind': kind, 'label': (label or name or '기타'), 'issued': iso_issued, 'points': pts, 'geo': bool(pts),
+              'closed': str(a.get('is_close', 'true')).lower() in ('true', '1')}
+        if kind == 'FZL':
+            m = re.search(r'0\s*[°º℃]\s*C?\s*[:：]?\s*(\d{3})', label)
+            if m:
+                it['fzlFt'] = int(m.group(1)) * 100
+        out.append(it)
+    return out
+
+
+def summarize_sigwx(text):
+    """형식 확인용 요약(점검 화면): 태그·속성·값 모양을 한 화면에 보이도록 압축한다."""
+    from collections import Counter
+    src = str(text or '').strip()
+    if not src.startswith('<'):
+        return '해석할 수 없는 형식입니다(XML 아님). 앞부분:\n' + src[:600]
+    try:
+        root = _ET.fromstring(src)
+    except _ET.ParseError as e:
+        return f'XML을 해석할 수 없습니다({e}). 앞부분:\n' + src[:600]
+    tags = Counter(_ln(e.tag) for e in root.iter())
+    lines = ['[구조 요약]', f'루트: {_ln(root.tag)} ' + ' '.join(f'{k}={v}' for k, v in list(root.attrib.items())[:12]),
+             '태그 수: ' + ', '.join(f'{k}×{v}' for k, v in tags.items())]
+    items = _xml_items(root)
+    groups = Counter((i.attrib.get('item_type', ''), i.attrib.get('contour_name', ''), i.attrib.get('item_name', ''), i.attrib.get('label', '')) for i in items)
+    lines.append(f'item {len(items)}건 (종류 {len(groups)}):')
+    for (t, c, n, l), k in list(groups.items())[:25]:
+        lines.append(f'  type={t} contour={c} name={n} label={l} ×{k}')
+    if items:
+        first = items[0]
+        lines.append('첫 item 속성: ' + ' '.join(f'{k}="{v}"' for k, v in first.attrib.items())[:500])
+        kids = list(first.iter())[1:4]
+        for k in kids:
+            lines.append(f'  하위 <{_ln(k.tag)}> 속성={dict(list(k.attrib.items())[:6])} 글자={(k.text or "").strip()[:80]!r}')
+        if not kids:
+            lines.append('  (첫 item에 하위 요소 없음)')
+    geo = sum(len(_latlon_pairs(_xml_point_values(i))) for i in items)
+    lines.append(f'위경도(한반도 범위)로 읽힌 위치 값: {geo}개 / item {len(items)}건 → ' + ('지도 좌표(경위도)' if geo else '경위도 아님(화면 좌표 등)'))
+    return '\n'.join(lines)
+
+
 def parse_sigwx(text, issued=None):
     """저고도 중요기상예보. issued: 조회한 발표시각 tmfc(UTC, YYYYMMDDHH). JSON(출력 변수 item_type·item_name·label·pt)을 우선 해석하고, 아니면 텍스트 행 형식으로 해석한다."""
     iso_issued = None
@@ -546,6 +632,8 @@ def parse_sigwx(text, issued=None):
         iso_issued = datetime.strptime(str(issued), '%Y%m%d%H').replace(tzinfo=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     out = []
     src = str(text or '').strip()
+    if src.startswith('<'):
+        return _parse_sigwx_xml(src, iso_issued)
     if src[:1] in '[{':
         try:
             found = []

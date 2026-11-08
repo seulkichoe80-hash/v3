@@ -116,6 +116,10 @@ if (!(await page.textContent('#rows')).includes('경유지1')) fail('근거 표�
 if (!(await page.textContent('#rows')).includes('저고도 중요기상')) fail('근거 표에 저고도 중요기상 없음');
 await page.click('#sigwx-raw-wrap summary');
 await page.waitForFunction(() => /ICE|MOD_ICE/.test(document.querySelector('#sigwx-raw').textContent), null, { timeout: 5000 }).catch(() => fail('SIGWX 원문 보기 안 됨'));
+await page.click('#sigwx-sum-btn');
+await page.waitForFunction(() => document.querySelector('#sigwx-raw').dataset.mode === 'summary' && document.querySelector('#sigwx-raw').textContent.length > 5, null, { timeout: 5000 }).catch(() => fail('SIGWX 구조 요약 안 됨'));
+await page.click('#sigwx-data-btn');
+await page.waitForFunction(() => /ICE|MOD_ICE/.test(document.querySelector('#sigwx-raw').textContent), null, { timeout: 5000 }).catch(() => fail('SIGWX 조회 결과 버튼 안 됨'));
 await page.click('#sigwx-help-btn');
 await page.waitForFunction(() => document.querySelector('#sigwx-raw').dataset.mode === 'help' && document.querySelector('#sigwx-raw').textContent.length > 5, null, { timeout: 5000 }).catch(() => fail('SIGWX API 설명문 보기 안 됨'));
 if ((await page.locator('#legs tr').count()) !== 2) fail('구간표 2행 아님');

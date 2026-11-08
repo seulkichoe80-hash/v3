@@ -239,3 +239,36 @@ test('ASOS 중하층 운량만 있고 전운량이 없어도 운고 정보로 �
   const row = r.rows.find((x) => x.segment === '목적지' && x.item === '운고');
   assert.equal(row.grade, 'RED'); assert.match(row.note, /중하층 7\/10/);
 });
+
+// ---- 기상특보 매칭 보정 ----
+test('바다 구역 이름에 시군구 이름이 글자로 들어 있어도 육지 경로와 일치시키지 않음(부안 ⊂ 중부안쪽먼바다)', () => {
+  const warns = [{ regUpName: '동해중부전해상', regName: '동해중부안쪽먼바다', kind: '풍랑', level: '예비', cmd: '발표' },
+                 { regUpName: '서해중부전해상', regName: '서해중부안쪽먼바다', kind: '풍랑', level: '주의', cmd: '발표' }];
+  const r = evaluate(base({ routeRegions: [{ sido: '전북특별자치도', sigungu: '부안군' }], regionsAvailable: true, data: { ...base().data, warn: warns } }));
+  const rows = r.rows.filter((x) => x.item === '기상특보');
+  assert.equal(rows.length, 1); assert.equal(rows[0].grade, 'GREEN'); assert.match(rows[0].value, /해당 없음/);
+});
+test('특보 등급 표기 "주의"도 주의보로 인식(육지 구역 → RED), "예비"는 참고', () => {
+  const mk = (level) => ({ regUpName: '경기도', regName: '수원', kind: '강풍', level, cmd: '발표' });
+  const run = (level) => evaluate(base({ routeRegions: [{ sido: '경기도', sigungu: '수원시 영통구' }], regionsAvailable: true, data: { ...base().data, warn: [mk(level)] } })).rows.find((x) => x.item === '기상특보');
+  assert.equal(run('주의').grade, 'RED'); assert.equal(run('주의보').grade, 'RED'); assert.equal(run('경보').grade, 'RED');
+  const p = run('예비'); assert.equal(p.grade, 'YELLOW'); assert.match(p.note, /참고/);
+});
+test('해상 경로 + 먼바다 풍랑주의(표기 "주의") → 해상 특보구역 확인(YELLOW)', () => {
+  const w = { regUpName: '서해중부전해상', regName: '서해중부안쪽먼바다', kind: '풍랑', level: '주의', cmd: '발표' };
+  const row = evaluate(base({ seaRoute: true, routeRegions: [{ sido: '전북특별자치도', sigungu: '부안군' }], regionsAvailable: true, data: { ...base().data, warn: [w] } })).rows.find((x) => x.item === '기상특보');
+  assert.equal(row.grade, 'YELLOW'); assert.match(row.note, /해상/);
+});
+// ---- 저고도 SIGWX: 위치 없는 요소 ----
+const sigRow = (items, extra = {}) => evaluate(base({ ...extra, data: { ...base().data, sigwx: items } })).rows.find((x) => x.item === '저고도 중요기상');
+test('SIGWX: 위험 요소는 있는데 위치(경위도)가 없으면 NA, 0℃ 고도는 안내', () => {
+  const r = sigRow([{ kind: 'FZL', label: 'freezing_level 0°C:050', points: [], geo: false, fzlFt: 5000, issued: '2026-11-08T17:00:00Z' },
+                    { kind: 'ICE', label: 'MOD ICE', points: [], geo: false, issued: '2026-11-08T17:00:00Z' }]);
+  assert.equal(r.grade, 'NA'); assert.match(r.note, /위치/); assert.match(r.note + r.value, /5000ft/); assert.match(r.value, /착빙/);
+});
+test('SIGWX: 위치 있는 요소는 교차 판정, 위치 없는 위험 요소가 섞이면 NA', () => {
+  const far = { kind: 'ICE', label: 'ICE', issued: '2026-11-08T17:00:00Z', geo: true, points: [{ lat: 36, lon: 126 }, { lat: 36, lon: 127 }, { lat: 35.5, lon: 127 }] };
+  assert.equal(sigRow([far]).grade, 'GREEN');
+  assert.equal(sigRow([far, { kind: 'TURB', label: 'TURB', points: [], geo: false }]).grade, 'NA');
+  assert.equal(sigRow([{ kind: 'FZL', label: '0°C:050', points: [], geo: false, fzlFt: 5000 }]).grade, 'GREEN');   // 위험구역 발표 없음(0℃ 고도만)
+});

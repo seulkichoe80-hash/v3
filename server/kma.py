@@ -167,7 +167,7 @@ class KmaClient:
             return items
         raise KeyError(kind)
 
-    def raw(self, kind, limit=4000, icao='RKSS', help=False):
+    def raw(self, kind, limit=4000, icao='RKSS', help=False, summary=False):
         """점검용: 기상청 원본 응답 앞부분(인증키 가림)."""
         url = self._url(kind, icao=icao if icao.isalnum() else 'RKSS')
         if help:   # 설명문 요청: 다른 변수 없이 help=1과 인증키만 보낸다(변수가 틀려도 설명문은 받을 수 있게)
@@ -175,6 +175,8 @@ class KmaClient:
         mask = (lambda s: s.replace(self.key, '****')) if self.key else (lambda s: s)
         try:
             body = self.fetch(url, timeout=self.timeout)
+            if summary and kind == 'sigwx':
+                body = P.summarize_sigwx(body)
             return {'url': mask(url), 'ok': True, 'body': mask(body[:limit])}
         except Exception as e:
             return {'url': mask(url), 'ok': False, 'body': mask(f'{type(e).__name__}: {e}')[:limit]}

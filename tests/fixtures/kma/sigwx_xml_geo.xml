@@ -1,0 +1,6 @@
+<odmap_ml height_mode="LOW" show_airport="0" map_range_mode="normal" amd_use="0" amd_hour="17" amd_min="00" amd_tar_low="" amd_tar_mid="" fpv_safe_bound_width="632.09" fpv_safe_bound_height="622.81">
+<low><list_item>
+<item item_type="4" contour_name="freezing_level" item_name="" label="0°C:050" icon_name="" shape_type="" icon_text_pos="0" is_close="false" is_fill="0" lien_width="2" curve_tention="0.5" lien_type="3" color_back="ffffff" color_line="ff0000" label_pos_pt="-1" label_pos_offset_x="0" label_pos_offset_y="0"><pt>37.0,126.0</pt><pt>37.0,129.0</pt></item>
+<item item_type="2" contour_name="icing" item_name="MOD ICE" label="MOD ICE" is_close="true" is_fill="1" color_line="0000ff"><pt>37.8,126.6</pt><pt>37.8,127.2</pt><pt>37.3,127.2</pt><pt>37.3,126.6</pt></item>
+<item item_type="3" contour_name="turbulence" item_name="MOD TURB" label="MOD TURB" is_close="true"><pt x="129.0" y="35.0"/><pt x="129.4" y="35.2"/><pt x="129.5" y="34.9"/></item>
+</list_item></low></odmap_ml>

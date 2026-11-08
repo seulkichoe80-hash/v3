@@ -62,16 +62,17 @@ async function init() {
     if (!ok) await askCode();
   }
   $('history-csv').addEventListener('click', downloadHistory);
-  const loadSigwxRaw = async (help) => {
-    const pre = $('sigwx-raw'); pre.textContent = '불러오는 중…'; pre.dataset.mode = help ? 'help' : 'data';
+  const loadSigwxRaw = async (mode) => {   // 'data' | 'help' | 'summary'
+    const pre = $('sigwx-raw'); pre.textContent = '불러오는 중…'; pre.dataset.mode = mode;
     try {
-      const d = await (await api('/api/raw/sigwx?limit=20000' + (help ? '&help=1' : ''))).json();
-      pre.textContent = (help ? '[API 설명문]\n' : '[조회 결과]\n') + (d.ok ? '' : '[수신 실패] ') + (d.body || d.error || '');
+      const d = await (await api('/api/raw/sigwx?limit=20000' + (mode === 'help' ? '&help=1' : mode === 'summary' ? '&summary=1' : ''))).json();
+      pre.textContent = ({ help: '[API 설명문]\n', summary: '', data: '[조회 결과]\n' }[mode]) + (d.ok ? '' : '[수신 실패] ') + (d.body || d.error || '');
     } catch (err) { pre.textContent = '불러오지 못했습니다: ' + err.message; }
   };
-  $('sigwx-raw-wrap').addEventListener('toggle', (e) => { if (e.target.open && !$('sigwx-raw').dataset.mode) loadSigwxRaw(false); });
-  $('sigwx-data-btn').addEventListener('click', () => loadSigwxRaw(false));
-  $('sigwx-help-btn').addEventListener('click', () => loadSigwxRaw(true));
+  $('sigwx-raw-wrap').addEventListener('toggle', (e) => { if (e.target.open && !$('sigwx-raw').dataset.mode) loadSigwxRaw('summary'); });
+  $('sigwx-sum-btn').addEventListener('click', () => loadSigwxRaw('summary'));
+  $('sigwx-data-btn').addEventListener('click', () => loadSigwxRaw('data'));
+  $('sigwx-help-btn').addEventListener('click', () => loadSigwxRaw('help'));
   showHistoryCount();
   $('cruise').value = cc.config.cruiseKt;
   $('depart').value = kstInputNow();
