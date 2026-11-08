@@ -32,6 +32,10 @@ if (await page.isVisible('#pt-from-coord') || await page.isVisible('#coord-fmt')
 await page.check('#coord-toggle');
 if ((await page.title()) !== '하늘길119') fail('탭 제목이 하늘길119 아님');
 if ((await page.inputValue('#cruise')) !== '120') fail('순항속도 기본값 120 아님');
+await page.uncheck('#coord-toggle');
+if (await page.isVisible('#pt-from-name')) fail('좌표 입력 꺼짐일 때 이름 칸은 숨김이어야 함');
+if (await page.locator('#pt-from-star').count()) fail('카드의 ★저장 버튼은 없어야 함');
+await page.check('#coord-toggle');
 // 주요지점: 추가 → 목록 선택으로 목적지 지정 → 카드 검색에 ★ 표시 → 카드 ★저장 → 삭제
 await page.click('#places-sum');
 await page.fill('#place-name', '테스트헬리패드'); await page.fill('#place-coord', '37.60, 126.95'); await page.fill('#place-memo', '옥상');
@@ -41,9 +45,11 @@ await page.click('#place-list li:has-text("테스트헬리패드") .pick');
 if ((await page.inputValue('#pt-to-name')) !== '테스트헬리패드') fail('주요지점 선택이 목적지에 반영 안 됨');
 await page.fill('#pt-from-q', '헬리'); await page.dispatchEvent('#pt-from-q', 'input');
 await page.waitForFunction(() => /★\s*테스트헬리패드/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 }).catch(() => fail('카드 검색에 주요지점 안 나옴'));
-await page.click('#pt-from-results li:has-text("테스트헬리패드")');
+await page.press('#pt-from-q', 'Enter');
 if ((await page.inputValue('#pt-from-name')) !== '테스트헬리패드') fail('카드 검색 결과 선택 안 됨');
-page.once('dialog', (d) => d.accept('카드저장지점')); await page.click('#pt-from-star');
+await page.selectOption('#place-from', 'from');
+if ((await page.inputValue('#place-name')) !== '테스트헬리패드' || !/37\.6/.test(await page.inputValue('#place-coord'))) fail('현재 지점 가져오기 안 됨');
+await page.fill('#place-name', '카드저장지점'); await page.click('#place-add');
 await page.waitForFunction(() => /카드저장지점/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('카드 ★저장 안 됨'));
 page.once('dialog', (d) => d.accept()); await page.click('#place-list li:has-text("카드저장지점") .del');
 await page.waitForFunction(() => !/카드저장지점/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('주요지점 삭제 안 됨'));
@@ -55,7 +61,7 @@ await page.fill('#pt-from-coord', '37 33'); await page.dispatchEvent('#pt-from-c
 if (!/숫자 6개/.test(await page.textContent('#pt-from-msg'))) fail('좌표 형식 오류 안내 없음');
 await page.fill('#pt-from-coord', '373330N1264726E'); await page.dispatchEvent('#pt-from-coord', 'change');
 await page.uncheck('#coord-toggle');
-if (!/위치 37\.558/.test(await page.textContent('#pt-from-loc'))) fail('좌표 숨김 시 위치 요약 없음');
+if (!/📍 김포 \(37\.558/.test(await page.textContent('#pt-from-loc'))) fail('좌표 숨김 시 위치 요약 없음');
 await page.check('#coord-toggle');
 await page.click('#add-via');
 await page.selectOption('#coord-fmt', 'ddm');

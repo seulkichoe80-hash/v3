@@ -183,3 +183,5 @@ body.coords-on .place .loc { display: none; }
 .results li.fav { background: #fffbea; }
 .place .row .star { flex: none; padding: 0 10px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
 .top h1 .formal { font-size: 13px; font-weight: 600; color: #b9c6d3; margin-left: 8px; }
+.place-add select { margin-top: 6px; }
+.place .loc { color: var(--ink); }

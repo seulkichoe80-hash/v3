@@ -70,6 +70,10 @@ async function init() {
   loadPlaces();
   $('place-q').addEventListener('input', renderPlaces);
   $('place-add').addEventListener('click', addPlaceFromForm);
+  $('place-from').addEventListener('change', (e) => {
+    const p = state.points[pointKeys().indexOf(e.target.value)];
+    if (p && Number.isFinite(p.lat)) { $('place-name').value = p.name || ''; $('place-coord').value = formatCoord(p, fmtNow()); }
+  });
   for (const id of ['depart', 'cruise']) $(id).addEventListener('change', updateAuto);
   renderPoints();
   $('run').addEventListener('click', run);
@@ -148,15 +152,15 @@ function renderPoints() {
         <button type="button" data-act="up" data-i="${i}" aria-label="위로">▲</button><button type="button" data-act="down" data-i="${i}" aria-label="아래로">▼</button><button type="button" data-act="del" data-i="${i}">삭제</button></div>` : '';
     return `<fieldset class="place ${p.role}" data-i="${i}"><legend>${roleLabel(k)}</legend>${base}
       <div class="search"><input id="pt-${k}-q" type="search" placeholder="장소 검색" autocomplete="off"><ul class="results" id="pt-${k}-results"></ul></div>
-      <div class="row"><input id="pt-${k}-name" placeholder="이름" value="${esc(p.name)}"><button type="button" class="star" id="pt-${k}-star" title="이 위치를 주요지점으로 저장">★ 저장</button></div>
-      <div class="loc" id="pt-${k}-loc">${Number.isFinite(p.lat) ? `위치 ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}` : '위치 미지정 — 장소 검색 또는 지도 클릭'}</div>
+      <div class="row coord-only"><input id="pt-${k}-name" placeholder="이름 (좌표로 입력할 때)" value="${esc(p.name)}"></div>
+      <div class="loc" id="pt-${k}-loc">${Number.isFinite(p.lat) ? `📍 ${esc(p.name || '')} (${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})` : '위치 미지정 — 검색 후 Enter 또는 지도 클릭'}</div>
       <div class="row coord-only"><input id="pt-${k}-coord" placeholder="${esc(COORD_PLACEHOLDER[fmtNow()])}" value="${esc(p.text)}" spellcheck="false" aria-label="${roleLabel(k)} 좌표"></div>
       <div class="coord-msg coord-only" id="pt-${k}-msg"></div>${tools}
       <label class="inline"><input type="radio" name="clickset" value="${k}" ${state.clickTarget === k ? 'checked' : ''}> 지도 클릭·주요지점 → 이 지점</label></fieldset>`;
   }).join('');
   state.points.forEach((p, i) => wirePoint(p, keys[i]));
   $('add-via').disabled = state.points.filter((p) => p.role === 'via').length >= MAX_VIA;
-  updateAuto(); drawRouteOnly();
+  updatePlaceFrom(); updateAuto(); drawRouteOnly();
 }
 
 function wirePoint(p, k) {
@@ -172,22 +176,17 @@ function wirePoint(p, k) {
       msg.textContent = `→ ${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}${r.warning ? ' · ' + r.warning : ''}`;
       msg.className = 'coord-msg' + (r.warning ? ' warn' : '');
     }
-    $(`pt-${k}-loc`).textContent = Number.isFinite(p.lat) ? `위치 ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}` : '위치 미지정 — 장소 검색 또는 지도 클릭';
-    updateAuto(); drawRouteOnly();
+    $(`pt-${k}-loc`).textContent = Number.isFinite(p.lat) ? `📍 ${p.name || ''} (${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})` : '위치 미지정 — 검색 후 Enter 또는 지도 클릭';
+    updatePlaceFrom(); updateAuto(); drawRouteOnly();
   };
   coord.addEventListener('change', apply);
   coord.addEventListener('blur', apply);
   if (p.text) apply();
-  $(`pt-${k}-name`).addEventListener('input', (e) => { p.name = e.target.value; });
+  $(`pt-${k}-name`).addEventListener('input', (e) => { p.name = e.target.value; updatePlaceFrom(); });
   const stay = $(`pt-${k}-stay`); if (stay) stay.addEventListener('input', (e) => { p.stayMin = Math.max(0, Number(e.target.value) || 0); updateAuto(); });
   const base = $(`pt-${k}-base`);
   if (base) base.addEventListener('change', (e) => { const b = state.config.bases[+e.target.value]; if (b) setPointByKey(k, { name: b.name, lat: b.lat, lon: b.lon }); });
   document.querySelectorAll(`fieldset[data-i] input[name=clickset][value="${k}"]`).forEach((r) => r.addEventListener('change', () => { state.clickTarget = k; }));
-  $(`pt-${k}-star`).addEventListener('click', async () => {
-    if (!Number.isFinite(p.lat)) { alert('먼저 위치를 지정하세요'); return; }
-    const name = prompt('주요지점 이름', p.name || ''); if (!name || !name.trim()) return;
-    try { await savePlace({ name: name.trim(), lat: p.lat, lon: p.lon, memo: '' }); } catch (e) { alert('저장 실패: ' + e.message); }
-  });
   setupSearch(k);
 }
 
@@ -225,6 +224,13 @@ function matchPlaces(q) {
 function setupSearch(k) {
   const q = $(`pt-${k}-q`), list = $(`pt-${k}-results`);
   let t = null;
+  q.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const first = list.querySelector('li[data-f], li[data-i]');
+    if (first) first.click();
+    else { clearTimeout(t); q.dispatchEvent(new Event('input')); setTimeout(() => list.querySelector('li[data-f], li[data-i]')?.click(), 900); }
+  });
   q.addEventListener('input', () => {
     clearTimeout(t);
     t = setTimeout(() => {
@@ -262,6 +268,14 @@ async function loadPlaces() {
   state.placesShared = shared; state.places = list;
   $('places-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})` : shared ? '상황실 공유 저장' : '공유 저장소 미연결 — 이 브라우저에만 저장';
   renderPlaces();
+}
+
+function updatePlaceFrom() {
+  const sel = $('place-from'); if (!sel) return;
+  const keys = pointKeys(), cur = sel.value;
+  sel.innerHTML = '<option value="">현재 지점에서 가져오기…</option>' + state.points.map((p, i) => Number.isFinite(p.lat)
+    ? `<option value="${keys[i]}">${esc(roleLabel(keys[i]).replace('(현장)', ''))}: ${esc(p.name || formatCoord(p, 'dd'))}</option>` : '').join('');
+  if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 
 function renderPlaces() {
