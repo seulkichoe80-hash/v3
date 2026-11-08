@@ -1,0 +1,5 @@
+#START7777
+# STN_ID     LON          LAT      STN_SP      HT   HT_WD  LAU_ID  STN_AD   STN_KO     STN_EN    FCT_ID  LAW_ID   BASIN
+   400  127.04700000   37.51310000  ----   37.00   10.0  ----  ----  강남       Gangnam   11B10101 1168000000 1018
+   410  126.90560000   37.55620000  ----   20.00   10.0  ----  ----  마포       Mapo      11B10101 1144000000 1018
+#7777END

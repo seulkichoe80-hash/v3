@@ -1,0 +1,1 @@
+{"response":{"header":{"resultCode":"00","resultMsg":"NORMAL_SERVICE"},"body":{"items":{"item":[{"icaoCode":"RKSS","tm":"202611080500","metarMsg":"METAR RKSS 080500Z 32012G25KT 2500 BR BKN008 OVC020 12/10 Q1015 NOSIG="},{"icaoCode":"RKSI","tm":"202611080500","metarMsg":"METAR RKSI 080500Z 30008KT CAVOK 13/03 Q1016 NOSIG="}]}}}}
