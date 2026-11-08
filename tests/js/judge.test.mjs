@@ -146,3 +146,7 @@ test('I5 해상 구간 + 해상 특보구역 강풍 → YELLOW 해상 특보구�
   const row = r.rows.find((x) => x.item === '기상특보');
   assert.equal(row.grade, 'YELLOW'); assert.match(row.note, /해상/);
 });
+test('보고문에 값과 설명이 중복되지 않음', () => {
+  const r = evaluate(base({ notamsProvided: false }));
+  assert.ok(!/NOTAM 미입력 — NOTAM 미입력/.test(r.reportText), r.reportText);
+});

@@ -211,7 +211,8 @@ function buildReport(r, input) {
   const dest = r.rows.filter((x) => x.segment === '목적지');
   if (dest.length) parts.push('목적지 ' + dest.map((x) => `${x.item} ${x.value}(${GRADE_TEXT[x.grade]})`).join('·'));
   for (const x of r.rows.filter((x) => x.segment !== '목적지' && x.grade !== 'GREEN')) {
-    parts.push(`${x.item}${x.segment !== '경로' ? '(' + x.segment + ')' : ''} ${x.value}${x.note ? ' — ' + x.note : ''}`);
+    const note = x.note && !x.note.startsWith(x.value) ? ' — ' + x.note : '';
+    parts.push(`${x.item}${x.segment !== '경로' ? '(' + x.segment + ')' : ''} ${x.note && x.note.startsWith(x.value) ? x.note : x.value + note}`);
   }
   const w = r.wind.find((x) => x.segment === '목적지');
   if (w && w.windMs !== null) parts.push(`바람(목적지) ${dirText(w.windDir)} ${w.windMs}m/s${w.gustMs ? ' 순간 ' + w.gustMs + 'm/s' : ''}${w.trend ? ' ' + w.trend : ''}`);
