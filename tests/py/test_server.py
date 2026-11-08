@@ -76,3 +76,10 @@ class HttpTest(unittest.TestCase):
         self.assertTrue(lines[-1].endswith('김포,서울역,15.9,YELLOW'), lines[-1])
 
 if __name__ == '__main__': unittest.main()
+
+class ReviewC1(unittest.TestCase):
+    def test_non_table_body_is_error(self):
+        def f(url, timeout=5): return '{"result":{"status":403,"message":"활용신청하지 않은 API"}}'
+        c = KmaClient(KEY, CONFIG, fetch=f, now=Clock())
+        for kind in ('warn', 'lightning', 'asos', 'aws'):
+            r = c.get(kind); self.assertTrue(r['error'], kind); self.assertEqual(r['items'], [])

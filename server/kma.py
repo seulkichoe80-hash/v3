@@ -68,7 +68,11 @@ class KmaClient:
         return url + ('&' if '?' in url else '?') + 'authKey=' + self.key
 
     def _get(self, kind, **kw):
-        return self.fetch(self._url(kind, **kw), timeout=self.timeout)
+        text = self.fetch(self._url(kind, **kw), timeout=self.timeout)
+        # typ01 표 형식 응답은 '#' 주석/헤더 줄을 가진다. 없으면 오류 응답(활용신청 안 됨, 인증 실패 등)으로 본다.
+        if kind not in ('metar', 'taf') and not any(l.lstrip().startswith('#') for l in text.splitlines()):
+            raise RuntimeError('기상청 응답 형식 아님: ' + text.strip()[:120])
+        return text
 
     # --- 종류별 수집 ---
     def _stations(self, which):

@@ -33,3 +33,6 @@ test('isNightDuring', () => {
   assert.equal(isNightDuring(seoul, seoul, kst('2026-11-08T12:00:00'), kst('2026-11-08T12:30:00')), false);
   assert.equal(isNightDuring(seoul, seoul, kst('2026-11-08T02:00:00'), kst('2026-11-08T02:30:00')), true);
 });
+test('I2 isNightDuring 잘못된 시각 → 멈추지 않고 true(엄격)', () => {
+  assert.equal(isNightDuring(seoul, seoul, kst('2026-11-08T12:00:00'), new Date(NaN)), true);
+});

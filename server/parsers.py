@@ -93,6 +93,7 @@ def parse_asos(text, stations):
             out.append({'stn': r['STN'], 'name': st['name'], 'lat': st['lat'], 'lon': st['lon'],
                         'obsTime': kst_to_iso(r['TM']), 'visM': None if vs is None else int(vs * 10),
                         'ceilFt': ceil, 'cloudTenths': None if ca is None else int(ca),
+                        'ceilUnknown': ca is not None and ca >= 6 and ch is None,
                         'windDir': num(r['WD']), 'windMs': num(r['WS']), 'gustMs': num(r['GST_WS'])})
         except (KeyError, ValueError, TypeError):
             continue
@@ -204,9 +205,12 @@ def parse_metar(raw, airports, now=None):
                 gk = int(w.group(3)) if w.group(3) else None
                 break
         vis, ceil = _vis_ceil(body)
+        # 운고 높이 미상: BKN///·OVC///·VV/// 이거나, 구름 정보 그룹이 아예 없음
+        no_ceil_ok = any(t in ('CAVOK', 'NSC', 'NCD', 'SKC', 'CLR') or re.fullmatch(r'(FEW|SCT)\d{3}(CB|TCU)?', t) for t in body)
+        unknown = ceil is None and (any(re.fullmatch(r'(BKN|OVC|VV)///.*', t) for t in body) or not no_ceil_ok)
         ap = _airport(icao, airports)
         return {'icao': icao, 'name': ap['name'], 'lat': ap['lat'], 'lon': ap['lon'], 'obsTime': iso(obs),
-                'visM': vis, 'ceilFt': ceil, 'windDir': wd, 'windKt': wk, 'gustKt': gk, 'raw': raw}
+                'visM': vis, 'ceilFt': ceil, 'ceilUnknown': unknown, 'windDir': wd, 'windKt': wk, 'gustKt': gk, 'raw': raw}
     except (StopIteration, AttributeError, IndexError, ValueError, TypeError):
         return None
 

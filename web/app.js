@@ -40,7 +40,10 @@ function kstInputNow() {
   const k = new Date(Date.now() + 9 * 3600e3);
   return k.toISOString().slice(0, 16);
 }
-const departUtc = () => new Date(($('depart').value || kstInputNow()) + ':00+09:00');
+const departUtc = () => {
+  const d = new Date(($('depart').value || kstInputNow()).slice(0, 16) + ':00+09:00');
+  return Number.isFinite(d.getTime()) ? d : new Date();
+};
 
 // ---------- 카카오맵 ----------
 function kakaoFailed(msg) {
@@ -122,9 +125,14 @@ function readPlace(which) {
   return state[which];
 }
 
+function cruiseKt() {
+  const v = Number($('cruise').value);
+  return Number.isFinite(v) && v >= 40 && v <= 250 ? v : state.config.cruiseKt;
+}
+
 function flightTimes(from, to) {
   const dep = departUtc();
-  const min = (distanceKm(from, to) / (Number($('cruise').value || state.config.cruiseKt) * KM_PER_NM)) * 60;
+  const min = (distanceKm(from, to) / (cruiseKt() * KM_PER_NM)) * 60;
   return { dep, arr: new Date(dep.getTime() + min * 60e3) };
 }
 
@@ -171,20 +179,26 @@ async function run() {
       if (s.status === 'rejected') { data[k] = []; dataStatus[k] = 'error'; warns.push(`${KIND_TEXT[k]} 수신 실패`); return; }
       data[k] = s.value.items || [];
       if (s.value.error && !data[k].length) { dataStatus[k] = 'error'; warns.push(`${KIND_TEXT[k]} 수신 실패`); }
-      else if (s.value.stale) warns.push(`${KIND_TEXT[k]} ${s.value.ageMin}분 전 자료 사용(재수신 실패)`);
+      else if (s.value.stale) {
+        warns.push(`${KIND_TEXT[k]} ${s.value.ageMin}분 전 자료 사용(재수신 실패)`);
+        const lim = state.config.freshnessMin[k];
+        if (lim && s.value.ageMin > lim) dataStatus[k] = 'stale';
+      }
     });
 
     const { dep, arr } = flightTimes(from, to);
     const dn = $('daynight').value, ls = $('landsea').value;
     const isNight = dn === 'auto' ? isNightDuring(from, to, dep, arr) : dn === 'night';
     const seaSuggest = rr.available && rr.seaPoints > 0;
-    const isSea = ls === 'auto' ? seaSuggest : ls === 'sea';
-    $('landsea-auto').textContent = rr.available ? `자동: ${seaSuggest ? '해상 구간 포함' : '육상'}` : '자동 판별 불가(지도 없음) → 육상';
+    // 판별 불가 시 더 엄격한 해상 기준을 적용한다
+    const isSea = ls === 'auto' ? (rr.available ? seaSuggest : true) : ls === 'sea';
+    $('landsea-auto').textContent = rr.available ? `자동: ${seaSuggest ? '해상 구간 포함' : '육상'}` : '자동 판별 불가(지도 없음) → 해상 기준(엄격) 적용, 육상이면 직접 선택';
     if (!rr.available) warns.push('카카오맵 없음 — 특보구역 매칭·해상 자동판별 생략(특보 직접 확인)');
 
     const text = $('notam-text').value;
     const result = evaluate({
-      from, to, departUtc: dep, cruiseKt: Number($('cruise').value || state.config.cruiseKt), isNight, isSea, data, dataStatus,
+      from, to, departUtc: dep, cruiseKt: cruiseKt(), isNight, isSea, data, dataStatus,
+      regionsAvailable: rr.available, seaRoute: seaSuggest || (isSea && !rr.available),
       notams: splitNotams(text).map(parseNotam), notamsProvided: text.trim().length > 0,
       routeRegions: rr.regions, now: new Date(), config: state.config,
     });

@@ -45,7 +45,7 @@ function nearest(items, p, maxKm) {
 const alongRoute = (items, a, b, maxKm) => items.filter((it) => has(it) && pointToSegmentKm(it, a, b) <= maxKm);
 
 // 관측 하나가 '운고 정보'를 가지고 있는지(구름 적음 = 운고 없음과 결측을 구분)
-const hasCeilInfo = (o) => (o.icao ? o.visM !== null && o.visM !== undefined : o.cloudTenths !== null && o.cloudTenths !== undefined);
+const hasCeilInfo = (o) => (o.ceilUnknown ? false : o.icao ? o.visM !== null && o.visM !== undefined : o.cloudTenths !== null && o.cloudTenths !== undefined);
 const srcName = (o) => (o.icao ? `METAR ${o.name}(${o.icao})` : `ASOS ${o.name}(${o.stn})`);
 
 function obsRows(segment, obs, limits, input) {
@@ -102,17 +102,26 @@ function tafRows(tafs, limits, departUtc, arriveUtc) {
 const sidoKey = (s) => String(s || '').replace(/(특별자치도|특별자치시|특별시|광역시|도)$/, '');
 const sggKey = (s) => String(s || '').split(' ')[0].replace(/(시|군|구)$/, '');
 
-function warnRows(warns, regions, status) {
+function warnRows(warns, regions, status, regionsAvailable, seaRoute) {
   if (status === 'error') return [{ segment: '경로', item: '기상특보', value: '-', limit: '발효 없음', grade: 'NA', source: '기상청 특보', obsTime: null, note: '특보 자료 수신 실패 — 직접 확인' }];
+  const active = warns.filter((w) => !/해제/.test(w.cmd || ''));
+  const isCritical = (w) => CRITICAL_WARN.includes(w.kind) && /주의보|경보/.test(w.level || '');
+  if (!regionsAvailable) {
+    const crit = active.filter(isCritical);
+    if (!crit.length) return [{ segment: '경로', item: '기상특보', value: '전국 주요 특보 없음', limit: '발효 없음', grade: 'GREEN', source: '기상청 특보', obsTime: null, note: '' }];
+    return [{ segment: '경로', item: '기상특보', value: `전국 주요 특보 ${crit.length}건`, limit: '발효 없음', grade: 'YELLOW', source: '기상청 특보', obsTime: null,
+      note: '특보구역 매칭 불가(지도 없음) — 경로 해당 여부 직접 확인: ' + crit.slice(0, 5).map((w) => `${w.regName} ${w.kind}${w.level}`).join(', ') }];
+  }
   const rows = [];
-  for (const w of warns) {
-    if (/해제/.test(w.cmd || '')) continue;
+  for (const w of active) {
     const critical = CRITICAL_WARN.includes(w.kind) && /주의보|경보/.test(w.level || '');
     const exact = regions.some((r) => { const k = sggKey(r.sigungu); return k.length >= 2 && String(w.regName || '').includes(k); });
     const sido = regions.some((r) => sidoKey(r.sido) && sidoKey(r.sido) === sidoKey(w.regUpName));
+    const seaZone = seaRoute && critical && /바다|해상|연안/.test(w.regName || '');
     let grade = null, note = '';
     if (exact) { grade = critical ? 'RED' : 'YELLOW'; note = critical ? '경로·목적지 특보구역 발효(제21조①4)' : '참고 특보 발효'; }
     else if (sido && critical) { grade = 'YELLOW'; note = '같은 시·도 특보 — 특보구역 확인 필요'; }
+    else if (seaZone) { grade = 'YELLOW'; note = '해상 구간 — 해상 특보구역 확인 필요'; }
     if (grade) rows.push({ segment: '경로', item: '기상특보', value: `${w.regName} ${w.kind}${w.level}`, limit: '발효 없음', grade, source: '기상청 특보', obsTime: w.tmEf || null, note });
   }
   if (!rows.length) rows.push({ segment: '경로', item: '기상특보', value: '해당 없음', limit: '발효 없음', grade: 'GREEN', source: '기상청 특보', obsTime: null, note: '' });
@@ -122,6 +131,7 @@ function warnRows(warns, regions, status) {
 function lightningRow(items, a, b, input) {
   const { config, now, dataStatus = {} } = input;
   const base = { segment: '경로', item: '낙뢰', limit: `${config.radius.lightningKm}km 이내 없음`, source: '기상청 낙뢰', obsTime: null };
+  if (dataStatus.lightning === 'stale') return { ...base, value: '-', grade: 'NA', note: '낙뢰 자료 오래됨 — 레이더 직접 확인' };
   if (dataStatus.lightning === 'error') return { ...base, value: '-', grade: 'NA', note: '낙뢰 자료 수신 실패 — 레이더 직접 확인' };
   const near = items.filter((l) => ageMin(l.time, now) <= config.freshnessMin.lightning && has(l))
     .map((l) => pointToSegmentKm(l, a, b)).filter((d) => d <= config.radius.lightningKm);
@@ -146,7 +156,8 @@ function windInfo(segment, p, aws, metars, now, config) {
 }
 
 export function evaluate(input) {
-  const { from, to, departUtc, cruiseKt, isNight, isSea, data, config, notams = [], notamsProvided = notams.length > 0, routeRegions = [], dataStatus = {}, now } = input;
+  const { from, to, departUtc, isNight, isSea, data, config, notams = [], notamsProvided = notams.length > 0, routeRegions = [], regionsAvailable = routeRegions.length > 0, seaRoute = false, dataStatus = {}, now } = input;
+  const cruiseKt = Number.isFinite(input.cruiseKt) && input.cruiseKt >= 40 && input.cruiseKt <= 250 ? input.cruiseKt : config.cruiseKt;
   const distKm = distanceKm(from, to);
   const durationMin = distKm === 0 ? 0 : (distKm / (cruiseKt * KM_PER_NM)) * 60;
   const arriveUtc = new Date(departUtc.getTime() + durationMin * 60e3);
@@ -161,7 +172,7 @@ export function evaluate(input) {
     ...obsRows('경로', routeObs, limits, input),
     ...obsRows('목적지', pick(to), limits, input),
     ...tafRows(alongRoute(data.taf || [], from, to, metarKm), limits, departUtc, arriveUtc),
-    ...warnRows(data.warn || [], routeRegions, dataStatus.warn),
+    ...warnRows(data.warn || [], routeRegions, dataStatus.warn, regionsAvailable, seaRoute),
     lightningRow(data.lightning || [], from, to, input),
   ];
 
@@ -171,8 +182,8 @@ export function evaluate(input) {
   else if (!relevant.length) rows.push({ segment: '경로', item: 'NOTAM', value: `경로 관련 D NOTAM 없음 (입력 ${assessed.length}건)`, limit: '경로 관련 없음', grade: 'GREEN', source: 'xNotam', obsTime: null, note: '' });
   for (const n of relevant) {
     const rel = n.relation === 'CROSS' ? '경로 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : '위치 해석 불가';
-    rows.push({ segment: '경로', item: 'NOTAM', value: `${n.id} ${n.qcodeText || ''} ${rel}`.trim(), limit: '경로 관련 없음', grade: n.grade, source: 'xNotam', obsTime: null,
-      note: n.needsPermission ? `소방헬기 사전허가 필요${n.phones.length ? ' ' + n.phones.join(', ') : ''}` : (n.parseError || '') });
+    rows.push({ segment: '경로', item: 'NOTAM', value: `${n.id || '해석 불가'} ${n.qcodeText || ''} ${rel}`.trim(), limit: '경로 관련 없음', grade: n.grade, source: 'xNotam', obsTime: null,
+      note: n.needsPermission ? `소방헬기 사전허가 필요${n.phones.length ? ' ' + n.phones.join(', ') : ''}` : (n.parseError ? n.parseError + ' — 원문 확인' : '') });
   }
 
   const wind = [windInfo('출발지', from, data.aws || [], metars, now, config), windInfo('목적지', to, data.aws || [], metars, now, config)];

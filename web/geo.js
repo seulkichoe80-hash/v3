@@ -58,6 +58,7 @@ function isNightAt(p, t) {
 
 // 출발~도착 구간 중 어느 시점이든 출발지 또는 목적지가 야간이면 true (5분 간격 검사)
 export function isNightDuring(from, to, departUtc, arriveUtc) {
+  if (!Number.isFinite(departUtc?.getTime()) || !Number.isFinite(arriveUtc?.getTime())) return true; // 시각 이상 → 엄격(야간)
   const end = Math.max(departUtc.getTime(), arriveUtc.getTime());
   for (let t = departUtc.getTime(); ; t += 5 * 60e3) {
     const tt = new Date(Math.min(t, end));

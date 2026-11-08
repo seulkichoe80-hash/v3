@@ -30,6 +30,9 @@ if (!['RED', 'YELLOW', 'GREEN', 'NA'].includes(grade)) fail('등급 이상: ' + 
 if (!notamList.includes('D2840/26')) fail('NOTAM 목록에 D2840/26 없음');
 if (!report.includes('D2840/26')) fail('보고문에 D2840/26 없음');
 if ((await page.locator('#rows tr').count()) < 6) fail('근거 표 행 부족');
+if (!(await page.textContent('#landsea-auto')).includes('해상 기준')) fail('지도 없음 시 해상(엄격) 기준 안내 없음');
+await page.fill('#cruise', '0'); await page.dispatchEvent('#cruise', 'change'); await page.click('#run');
+await page.waitForFunction(() => document.querySelector('#run-msg').textContent.includes('판단 완료'), null, { timeout: 5000 }).catch(() => fail('순항속도 0 입력 시 멈춤'));
 if (errors.length) fail('콘솔 오류: ' + errors.join(' / '));
 if (process.env.SHOT) await page.screenshot({ path: ROOT + process.env.SHOT, fullPage: true });
 console.log('PASS grade=' + grade);

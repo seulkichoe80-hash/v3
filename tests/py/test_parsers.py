@@ -73,3 +73,14 @@ class T(unittest.TestCase):
         self.assertIsNone(P.parse_metar('garbage', AIRPORTS, NOW)); self.assertIsNone(P.parse_taf('garbage', AIRPORTS, NOW))
 
 if __name__ == '__main__': unittest.main()
+
+class Review(unittest.TestCase):
+    def test_i1_asos_ceil_unknown(self):
+        line = fx('asos.txt').splitlines()[5].replace('  7   5    8 Sc', '  8   5   -9 Sc')
+        r = P.parse_asos('#\n' + line, {})[0]
+        self.assertEqual(r['cloudTenths'], 8); self.assertIsNone(r['ceilFt']); self.assertTrue(r['ceilUnknown'])
+    def test_i1_metar_ceil_unknown(self):
+        self.assertTrue(P.parse_metar('METAR RKSS 080500Z 32012KT 9999 BKN/// 12/10 Q1015=', AIRPORTS, NOW)['ceilUnknown'])
+        self.assertTrue(P.parse_metar('METAR RKSS 080500Z 32012KT 9999 12/10 Q1015=', AIRPORTS, NOW)['ceilUnknown'])
+        self.assertFalse(P.parse_metar('METAR RKSS 080500Z 32012KT 9999 FEW030 12/10 Q1015=', AIRPORTS, NOW)['ceilUnknown'])
+        self.assertFalse(P.parse_metar('METAR RKSI 080500Z 30008KT CAVOK 13/03 Q1016=', AIRPORTS, NOW)['ceilUnknown'])

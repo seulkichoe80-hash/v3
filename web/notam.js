@@ -1,7 +1,7 @@
 // NOTAM 해석기: D 시리즈만 확인 대상, 구역 좌표는 E) 우선(도분초), 실패 시 Q-line(도분) 근사
 import { pointToSegmentKm, KM_PER_NM } from './geo.js';
 
-const START_RE = /\(?\s*([A-Z]\d{4}\/\d{2})\s+NOTAM[NRC]\b/g;
+const START_RE = /\(?\s*([A-Z]\d{4}\/\d{2})\s+NOTAM\s?[NRC]\b/g;
 export const QCODE_TEXT = {
   QRPCA: '비행금지구역 활성', QRRCA: '제한구역 활성', QRDCA: '위험구역 활성',
   QWULW: '무인기 비행', QOBCE: '장애물 설치', QWPLW: '낙하산 강하',
@@ -11,7 +11,10 @@ export function splitNotams(text) {
   const src = String(text || '');
   const idx = [...src.matchAll(START_RE)].map((m) => m.index);
   if (idx.length === 0) return src.trim() ? [src.trim()] : [];
-  return idx.map((s, i) => src.slice(s, idx[i + 1] ?? src.length).trim());
+  const out = idx.map((s, i) => src.slice(s, idx[i + 1] ?? src.length).trim());
+  const prefix = src.slice(0, idx[0]);
+  if (/[QE]\)/.test(prefix)) out.unshift(prefix.trim()); // 첫 NOTAM 앞 본문은 버리지 않고 해석 불가로 표시
+  return out;
 }
 
 function utc(yymmddhhmm) {
@@ -27,7 +30,7 @@ export function parseNotam(raw) {
   const n = { id: null, series: null, kind: null, qcode: null, qcodeText: null, center: null, radiusNm: null,
     geomSource: null, start: null, end: null, endPerm: false, endEst: false, lower: '', upper: '', text: '',
     needsPermission: false, phones: [], parseError: null, raw: t };
-  const head = /([A-Z])(\d{4}\/\d{2})\s+NOTAM([NRC])/.exec(flat);
+  const head = /([A-Z])(\d{4}\/\d{2})\s+NOTAM\s?([NRC])/.exec(flat);
   if (!head) { n.parseError = 'NOTAM 번호를 찾을 수 없음'; return n; }
   n.id = head[1] + head[2]; n.series = head[1]; n.kind = head[3];
 
@@ -61,7 +64,7 @@ export function parseNotam(raw) {
 }
 
 export function assessNotam(n, routeA, routeB, departUtc, arriveUtc, nearNm = 5) {
-  const out = { ...n, inScope: n.series === 'D', distanceNm: null, relation: 'UNKNOWN', activeDuringFlight: null, grade: 'NA' };
+  const out = { ...n, inScope: !n.id || n.series === 'D', distanceNm: null, relation: 'UNKNOWN', activeDuringFlight: null, grade: 'NA' };
   if (n.start) {
     const endOk = n.endPerm || !n.end || n.end >= departUtc;
     out.activeDuringFlight = n.start <= arriveUtc && endOk;
@@ -75,6 +78,5 @@ export function assessNotam(n, routeA, routeB, departUtc, arriveUtc, nearNm = 5)
   else if (!n.center) out.grade = 'NA';
   else if ((out.relation === 'CROSS' || out.relation === 'NEAR') && out.activeDuringFlight !== false) out.grade = 'YELLOW';
   else out.grade = 'GREEN';
-  if (!n.id) out.inScope = false;
   return out;
 }

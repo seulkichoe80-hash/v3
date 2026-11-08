@@ -107,3 +107,42 @@ test('TAF가 비행 시간대를 덮지 않으면 NA', () => {
   const t = r.rows.find((x) => x.item === 'TAF');
   assert.equal(t.grade, 'NA'); assert.match(t.note, /예보 없음/);
 });
+// ---- 최종 리뷰 지적사항 ----
+test('C2 지도 없음(구역 매칭 불가) + 전국 태풍경보 → GREEN 금지(YELLOW)', () => {
+  const w = { regUpName: '서울특별시', regName: '서울서남권', kind: '태풍', level: '경보', cmd: '발표' };
+  const r = evaluate(base({ routeRegions: [], regionsAvailable: false, data: { ...base().data, warn: [w] } }));
+  const row = r.rows.find((x) => x.item === '기상특보');
+  assert.equal(row.grade, 'YELLOW'); assert.match(row.note, /매칭 불가/);
+});
+test('C3 해석 불가 NOTAM 입력 → NOTAM 행 NA', () => {
+  const r = evaluate(base({ notams: [parseNotam('엉망인 NOTAM 텍스트 Q)깨짐')] }));
+  const rows = r.rows.filter((x) => x.item === 'NOTAM');
+  assert.ok(rows.some((x) => x.grade === 'NA'), JSON.stringify(rows)); assert.ok(!rows.some((x) => x.grade === 'GREEN'));
+});
+test('C3 한 칸 띄운 헤더(NOTAM N)도 해석', () => {
+  const list = splitNotams(fx.replace('NOTAMN', 'NOTAM N'));
+  assert.equal(parseNotam(list[0]).id, 'D2840/26');
+});
+test('C3 첫 NOTAM 앞에 본문이 있으면 버리지 않음', () => {
+  const list = splitNotams('Q)RKRR/QRPCA/IV/BO/W/000/600/3735N12659E003 E)잘린 본문\n' + fx);
+  assert.equal(list.length, 2);
+});
+test('I1 운고 높이 미상(ceilUnknown) → 운고 NA', () => {
+  const r = evaluate(base({ data: { ...base().data, metar: [], asos: [asos({ cloudTenths: 8, ceilFt: null, ceilUnknown: true })] } }));
+  assert.equal(row(r, '목적지', '운고').grade, 'NA');
+});
+test('I2 순항속도 0/비정상 → 멈추지 않고 기본값 사용, NOTAM 무시 안 함', () => {
+  const r = evaluate(base({ cruiseKt: 0, notams: splitNotams(fx).map(parseNotam) }));
+  assert.ok(Number.isFinite(r.durationMin)); assert.ok(r.durationMin > 0);
+  assert.ok(r.rows.some((x) => x.item === 'NOTAM' && x.grade === 'YELLOW'));
+});
+test('I4 오래된 낙뢰 자료(stale) → NA', () => {
+  const r = evaluate(base({ dataStatus: { lightning: 'stale' } }));
+  assert.equal(r.rows.find((x) => x.item === '낙뢰').grade, 'NA');
+});
+test('I5 해상 구간 + 해상 특보구역 강풍 → YELLOW 해상 특보구역 확인', () => {
+  const w = { regUpName: '인천광역시', regName: '서해중부앞바다', kind: '풍랑', level: '주의보', cmd: '발표' };
+  const r = evaluate(base({ seaRoute: true, data: { ...base().data, warn: [w] } }));
+  const row = r.rows.find((x) => x.item === '기상특보');
+  assert.equal(row.grade, 'YELLOW'); assert.match(row.note, /해상/);
+});
