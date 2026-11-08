@@ -100,3 +100,10 @@ test('운고: METAR 구름 없음은 GREEN, 해상 기준 적용', () => {
   const r2 = evaluate(base({ data: { ...base().data, metar: [metar({ ceilFt: null })] } }));
   assert.equal(row(r2, '출발지', '운고').grade, 'GREEN');
 });
+test('TAF가 비행 시간대를 덮지 않으면 NA', () => {
+  const taf = [{ icao: 'RKSS', name: '김포', lat: 37.5583, lon: 126.7906, groups: [
+    { type: 'BASE', from: '2026-11-08T07:00:00Z', to: '2026-11-09T12:00:00Z', visM: 9000, ceilFt: 4000 }] }];
+  const r = evaluate(base({ data: { ...base().data, taf } }));
+  const t = r.rows.find((x) => x.item === 'TAF');
+  assert.equal(t.grade, 'NA'); assert.match(t.note, /예보 없음/);
+});

@@ -81,9 +81,10 @@ function tafRows(tafs, limits, departUtc, arriveUtc) {
   const t0 = departUtc.getTime(), t1 = arriveUtc.getTime() + 30 * 60e3;
   if (!tafs.length) return [{ segment: '경로', item: 'TAF', value: '-', limit: `${limits.visM}m / ${limits.ceilFt}ft`, grade: 'NA', source: '-', obsTime: null, note: '경로 주변 TAF 공항 없음 — 예보 직접 확인' }];
   return tafs.map((t) => {
-    let grade = 'GREEN', note = '비행 시간대 예보 기준 충족', value = '-';
+    let grade = 'GREEN', note = '비행 시간대 예보 기준 충족', value = '-', covered = false;
     for (const g of t.groups || []) {
       if (new Date(g.to).getTime() <= t0 || new Date(g.from).getTime() >= t1) continue;
+      if (g.type === 'BASE' || g.type === 'FM' || g.type === 'BECMG') covered = true;
       const below = (g.visM !== null && g.visM !== undefined && g.visM < limits.visM) || (g.ceilFt !== null && g.ceilFt !== undefined && g.ceilFt < limits.ceilFt);
       if (!below) continue;
       const gg = g.type === 'TEMPO' || g.type === 'PROB' ? 'YELLOW' : 'RED';
@@ -93,6 +94,7 @@ function tafRows(tafs, limits, departUtc, arriveUtc) {
         note = gg === 'RED' ? '비행 시간대 기준 미달 예보(제21조①3)' : '일시적 악화 예보(TEMPO/PROB) — 악화 우려 주의';
       }
     }
+    if (!covered && grade === 'GREEN') { grade = 'NA'; note = '비행 시간대 예보 없음 — 예보 직접 확인'; }
     return { segment: '경로', item: 'TAF', value, limit: `${limits.visM}m / ${limits.ceilFt}ft`, grade, source: `TAF ${t.name}(${t.icao})`, obsTime: t.issued || null, note };
   });
 }
