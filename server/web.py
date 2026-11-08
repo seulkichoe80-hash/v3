@@ -99,7 +99,7 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
                 limit = max(100, min(200000, int(path_q.get('limit', ['4000'])[0])))
             except ValueError:
                 limit = 4000
-            return _json(200, client.raw(kind, limit=limit, icao=path_q.get('icao', ['RKSS'])[0][:4]))
+            return _json(200, client.raw(kind, limit=limit, icao=path_q.get('icao', ['RKSS'])[0][:4], help=path_q.get('help', ['0'])[0] == '1'))
         return _json(404, {'error': 'unknown api'})
     if method == 'GET' and path.startswith('/api/'):
         kind = path[5:]

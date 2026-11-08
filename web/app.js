@@ -501,7 +501,7 @@ async function run() {
       const k = KINDS[i];
       if (s.status === 'rejected') { data[k] = []; dataStatus[k] = 'error'; warns.push(`${KIND_TEXT[k]} 수신 실패`); return; }
       data[k] = s.value.items || [];
-      if (s.value.error && !data[k].length) { dataStatus[k] = 'error'; warns.push(`${KIND_TEXT[k]} 수신 실패`); }
+      if (s.value.error && !data[k].length) { dataStatus[k] = 'error'; warns.push(`${KIND_TEXT[k]} 수신 실패 — ${String(s.value.error).slice(0, 140)}`); }
       else if (s.value.stale) {
         warns.push(`${KIND_TEXT[k]} ${s.value.ageMin}분 전 자료 사용(재수신 실패)`);
         const lim = state.config.freshnessMin[k];

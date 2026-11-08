@@ -1,5 +1,5 @@
 """기상청 API허브 대리 호출 + 정규화 + 캐시. 인증키는 이 모듈 밖(브라우저)으로 나가지 않는다."""
-import os, time, urllib.request
+import json, os, time, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from . import parsers as P
@@ -17,7 +17,7 @@ ENDPOINTS = {
     'lightning': H1 + 'lgt_pnt.php?tm1={tm_30ago}&tm2={tm_min}&help=0',
     'metar': H2 + 'AmmIwxxmService/getMetar?pageNo=1&numOfRows=10&dataType=JSON&icao={icao}',
     'taf': H2 + 'AmmIwxxmService/getTaf?pageNo=1&numOfRows=10&dataType=JSON&icao={icao}',
-    'sigwx': H1 + 'amo_sigwx.php?tm={tm_sigwx}&help=1',   # 저고도 중요기상예보(형식 확인용, 점검 주소 전용)
+    'sigwx': H1 + 'amo_sigwx.php?tm={tm_sigwx}&help=0',   # 저고도 중요기상예보 (설명문은 /api/raw/sigwx?help=1 로 확인)
 }
 TTL_MIN = {'sigwx': 30, 'asos': 5, 'aws': 2, 'warn': 5, 'lightning': 2, 'metar': 5, 'taf': 10, 'stn_sfc': 1440, 'stn_aws': 1440}
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tests', 'fixtures', 'kma')
@@ -79,9 +79,18 @@ class KmaClient:
 
     def _get(self, kind, **kw):
         text = self.fetch(self._url(kind, **kw), timeout=self.timeout)
+        # API허브 오류 응답: {"result":{"status":401,"message":"..."}} — 어느 자료든 오류 사유를 그대로 보여준다.
+        if text.lstrip().startswith('{'):
+            try:
+                res = json.loads(text).get('result') or {}
+                if int(res.get('status', 0)) >= 400:
+                    raise RuntimeError(f"기상청 오류 {res.get('status')}: {res.get('message', '')}"[:160])
+            except (ValueError, TypeError, AttributeError):
+                pass
         # typ01 표 형식 응답은 '#' 주석/헤더 줄을 가진다. 없으면 오류 응답(활용신청 안 됨, 인증 실패 등)으로 본다.
+        # 저고도 SIGWX는 실제 형식을 확인하기 전이라 이 검사를 하지 않는다(해석 불가는 '해석 불가'로 표시).
         json_ok = kind == 'warn' and text.lstrip().startswith('[')
-        if kind not in ('metar', 'taf') and not json_ok and not any(l.lstrip().startswith('#') for l in text.splitlines()):
+        if kind not in ('metar', 'taf', 'sigwx') and not json_ok and not any(l.lstrip().startswith('#') for l in text.splitlines()):
             raise RuntimeError('기상청 응답 형식 아님: ' + text.strip()[:120])
         return text
 
@@ -144,9 +153,11 @@ class KmaClient:
             return items
         raise KeyError(kind)
 
-    def raw(self, kind, limit=4000, icao='RKSS'):
+    def raw(self, kind, limit=4000, icao='RKSS', help=False):
         """점검용: 기상청 원본 응답 앞부분(인증키 가림)."""
         url = self._url(kind, icao=icao if icao.isalnum() else 'RKSS')
+        if help:
+            url = url.replace('help=0', 'help=1')
         mask = (lambda s: s.replace(self.key, '****')) if self.key else (lambda s: s)
         try:
             body = self.fetch(url, timeout=self.timeout)

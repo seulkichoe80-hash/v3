@@ -94,3 +94,29 @@ class RealFormats(unittest.TestCase):
         m = c.get('metar'); self.assertIsNone(m['error']); self.assertEqual(m['items'][0]['icao'], 'RKSS')
         t = c.get('taf'); self.assertIsNone(t['error']); self.assertEqual(len(t['items'][0]['groups']), 3)
         w = c.get('warn'); self.assertIsNone(w['error']); self.assertEqual(len(w['items']), 39)
+
+class SigwxRequest(unittest.TestCase):
+    def test_sigwx_production_url_requests_data_not_help(self):
+        seen = []
+        def f(url, timeout=5): seen.append(url); return mock_fetch(url, timeout)
+        c = KmaClient(KEY, CONFIG, fetch=f, now=Clock()); r = c.get('sigwx')
+        self.assertIn('amo_sigwx.php', seen[-1]); self.assertIn('help=0', seen[-1]); self.assertNotIn('help=1', seen[-1])
+        self.assertGreater(len(r['items']), 0)
+
+    def test_raw_help_flag(self):
+        seen = []
+        def f(url, timeout=5): seen.append(url); return 'x'
+        c = KmaClient(KEY, CONFIG, fetch=f, now=Clock())
+        c.raw('sigwx', help=True); self.assertIn('help=1', seen[-1])
+        c.raw('sigwx'); self.assertIn('help=0', seen[-1])
+
+    def test_hub_json_error_is_reported_with_message(self):
+        def f(url, timeout=5): return '{"result":{"status":401,"message":"유효한 인증키가 아닙니다."}}'
+        c = KmaClient(KEY, CONFIG, fetch=f, now=Clock())
+        for kind in ('sigwx', 'warn', 'lightning'):
+            r = c.get(kind); self.assertEqual(r['items'], []); self.assertIn('401', r['error']); self.assertIn('인증키', r['error'])
+
+    def test_sigwx_unknown_format_is_empty_not_error(self):
+        def f(url, timeout=5): return 'SIGWX 자료 형식이 다른 응답 (주석 줄 없음)\n1 2 3'
+        r = KmaClient(KEY, CONFIG, fetch=f, now=Clock()).get('sigwx')
+        self.assertEqual(r['items'], []); self.assertIsNone(r['error'])     # 해석 불가는 '수신 실패'가 아니라 '해석 불가'로 표시
