@@ -130,4 +130,28 @@ class SigwxHelpView(unittest.TestCase):
         u = seen[-1]
         self.assertIn('amo_sigwx.php?help=1', u); self.assertNotIn('tm=', u); self.assertIn('authKey=' + KEY, u)
         self.assertNotIn(KEY, json.dumps(r, ensure_ascii=False))           # 응답에서는 키가 가려짐
-        c.raw('sigwx'); self.assertIn('tm=', seen[-1]); self.assertIn('help=0', seen[-1])   # 일반 모드는 그대로
+        c.raw('sigwx'); self.assertIn('tmfc=', seen[-1]); self.assertIn('help=0', seen[-1])   # 일반 모드: 발표시각은 tmfc
+
+class SigwxTmfc(unittest.TestCase):
+    def test_uses_tmfc_utc_10_digits(self):
+        seen = []
+        def f(url, timeout=5): seen.append(url); return mock_fetch(url, timeout)
+        KmaClient(KEY, CONFIG, fetch=f, now=Clock()).get('sigwx')   # Clock = 2026-11-08 05:30 UTC → 05:30-30분=05:00 → 05UTC 발표
+        import re
+        m = re.search(r'amo_sigwx\.php\?tmfc=(\d{10})&', seen[-1]); self.assertTrue(m, seen[-1])
+        self.assertEqual(m.group(1), '2026110805'); self.assertNotIn('tm=2', seen[-1])
+
+    def test_falls_back_to_previous_issue(self):
+        seen = []
+        def f(url, timeout=5):
+            seen.append(url)
+            if 'tmfc=2026110805' in url: raise OSError('HTTP Error 500')
+            return mock_fetch(url, timeout)
+        r = KmaClient(KEY, CONFIG, fetch=f, now=Clock()).get('sigwx')
+        self.assertIsNone(r['error']); self.assertGreater(len(r['items']), 0)
+        self.assertTrue(any('tmfc=2026110723' in u for u in seen))
+
+    def test_all_attempts_fail_reports_error(self):
+        def f(url, timeout=5): raise OSError('HTTP Error 500')
+        r = KmaClient(KEY, CONFIG, fetch=f, now=Clock()).get('sigwx')
+        self.assertEqual(r['items'], []); self.assertIn('500', r['error'])

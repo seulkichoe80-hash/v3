@@ -67,8 +67,11 @@ class QueryCode(unittest.TestCase):
     def test_raw_accepts_code_query(self):
         self.assertEqual(call('GET', '/api/raw/warn?code=1234', code='1234')[0], 200)
         self.assertEqual(call('GET', '/api/raw/warn?code=bad', code='1234')[0], 401)
-    def test_sigwx_issue_time(self):
-        from server.kma import sigwx_issue_kst
+    def test_sigwx_issue_time_utc(self):
+        from server.kma import sigwx_issue_utc
         from datetime import datetime, timezone
-        self.assertEqual(sigwx_issue_kst(datetime(2026, 11, 8, 8, 30, tzinfo=timezone.utc)), '202611081400')  # 05UTC 발표
-        self.assertEqual(sigwx_issue_kst(datetime(2026, 11, 8, 4, 0, tzinfo=timezone.utc)), '202611080800')   # 23UTC(전날) 발표
+        u = lambda *a: datetime(*a, tzinfo=timezone.utc)
+        self.assertEqual(sigwx_issue_utc(u(2026, 11, 8, 8, 30)), '2026110805')            # 05UTC 발표분이 최신
+        self.assertEqual(sigwx_issue_utc(u(2026, 11, 8, 8, 30), back=1), '2026110723')    # 한 번 전: 전날 23UTC
+        self.assertEqual(sigwx_issue_utc(u(2026, 11, 8, 11, 10)), '2026110805')           # 11UTC 발표 후 30분 안 지남 → 아직 05UTC
+        self.assertEqual(sigwx_issue_utc(u(2026, 11, 8, 11, 40)), '2026110811')

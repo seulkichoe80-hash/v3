@@ -135,3 +135,18 @@ class Sigwx(unittest.TestCase):
         self.assertEqual(a[1]['kind'], 'FZL'); self.assertEqual(len(a[1]['points']), 2)
     def test_garbage(self):
         self.assertEqual(P.parse_sigwx(fx('error.html')), []); self.assertEqual(P.parse_sigwx('#START7777\n#7777END'), [])
+
+class SigwxJson(unittest.TestCase):
+    """실제 응답 형식을 확인하기 전 가정: 설명서의 출력 변수(item_type·item_name·label·pt 등)를 가진 JSON"""
+    ITEMS = [{'item_type': 'ICE', 'item_name': 'MOD ICE', 'label': 'MOD ICE', 'is_close': '1', 'pt': '37.8,126.6 37.8,127.2 37.3,127.2 37.3,126.6'},
+             {'item_type': 'TURB', 'item_name': 'MOD TURB', 'label': 'MOD TURB', 'is_close': '1', 'pt': [[35.0, 129.0], [35.2, 129.4], [34.9, 129.5]]},
+             {'item_type': 'JET', 'item_name': 'jet', 'pt': [{'x': 1, 'y': 2}]}]   # 위경도가 아닌 값은 버림
+    def test_list_and_wrapped(self):
+        import json
+        for body in (json.dumps(self.ITEMS), json.dumps({'response': {'body': {'items': {'item': self.ITEMS}}}})):
+            a = P.parse_sigwx(body)
+            self.assertEqual([x['kind'] for x in a], ['ICE', 'TURB']); self.assertEqual(len(a[0]['points']), 4); self.assertEqual(len(a[1]['points']), 3)
+            self.assertAlmostEqual(a[0]['points'][1]['lon'], 127.2)
+    def test_tmfc_issue_time(self):
+        a = P.parse_sigwx(__import__('json').dumps(self.ITEMS), issued='2026110805')
+        self.assertEqual(a[0]['issued'], '2026-11-08T05:00:00Z')

@@ -17,7 +17,7 @@ ENDPOINTS = {
     'lightning': H1 + 'lgt_pnt.php?tm1={tm_30ago}&tm2={tm_min}&help=0',
     'metar': H2 + 'AmmIwxxmService/getMetar?pageNo=1&numOfRows=10&dataType=JSON&icao={icao}',
     'taf': H2 + 'AmmIwxxmService/getTaf?pageNo=1&numOfRows=10&dataType=JSON&icao={icao}',
-    'sigwx': H1 + 'amo_sigwx.php?tm={tm_sigwx}&help=0',   # 저고도 중요기상예보 (설명문은 /api/raw/sigwx?help=1 로 확인)
+    'sigwx': H1 + 'amo_sigwx.php?tmfc={tmfc_sigwx}&help=0',   # 저고도 중요기상예보: 발표시각 tmfc(UTC, YYYYMMDDHH, 05·11·17·23시)
 }
 TTL_MIN = {'sigwx': 30, 'asos': 5, 'aws': 2, 'warn': 5, 'lightning': 2, 'metar': 5, 'taf': 10, 'stn_sfc': 1440, 'stn_aws': 1440}
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tests', 'fixtures', 'kma')
@@ -52,12 +52,13 @@ def mock_fetch(url, timeout=5):
         return f.read()
 
 
-def sigwx_issue_kst(now):
-    """가장 최근 저고도 SIGWX 발표시각(05·11·17·23 UTC)을 KST YYYYMMDDHHMM으로."""
-    t = now.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
+def sigwx_issue_utc(now, back=0):
+    """조회할 저고도 SIGWX 발표시각(UTC, YYYYMMDDHH). 발표(05·11·17·23UTC) 후 30분이 지난 가장 최근 것, back=1이면 한 번 이전 발표분."""
+    t = (now.astimezone(timezone.utc) - timedelta(minutes=30)).replace(minute=0, second=0, microsecond=0)
     while t.hour not in (5, 11, 17, 23):
         t -= timedelta(hours=1)
-    return t.astimezone(P.KST).strftime('%Y%m%d%H00')
+    t -= timedelta(hours=6 * back)
+    return t.strftime('%Y%m%d%H')
 
 
 class KmaClient:
@@ -70,9 +71,10 @@ class KmaClient:
     def _url(self, kind, **kw):
         kst = self.now().astimezone(P.KST)
         t_min = kst - timedelta(minutes=kw.pop('lag_min', 2))
+        back = kw.pop('back', 0)
         fmt = dict(tm_hour=kst.strftime('%Y%m%d%H00'), tm_min=t_min.strftime('%Y%m%d%H%M'),
                    tm_30ago=(t_min - timedelta(minutes=30)).strftime('%Y%m%d%H%M'), icao='',
-                   tm_sigwx=sigwx_issue_kst(self.now()))
+                   tmfc_sigwx=sigwx_issue_utc(self.now(), back))
         fmt.update(kw)
         url = ENDPOINTS[kind].format(**fmt)
         return url + ('&' if '?' in url else '?') + 'authKey=' + self.key
@@ -126,7 +128,19 @@ class KmaClient:
         if kind == 'lightning':
             return P.parse_lightning(self._get('lightning'))
         if kind == 'sigwx':
-            return P.parse_sigwx(self._get('sigwx'))
+            # 최신 발표분이 아직 없거나 오류면 한두 번 이전 발표분으로 다시 시도
+            last_err = None
+            for back in (0, 1, 2):
+                try:
+                    items = P.parse_sigwx(self._get('sigwx', back=back), issued=sigwx_issue_utc(now, back))
+                except Exception as e:
+                    last_err = e
+                    continue
+                if items:
+                    return items
+            if last_err is not None:
+                raise last_err
+            return []
         if kind in ('metar', 'taf'):
             def one(a):
                 try:

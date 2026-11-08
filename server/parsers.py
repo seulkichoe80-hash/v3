@@ -462,7 +462,7 @@ def _sigwx_kind(label):
     return 'ETC'
 
 
-def parse_sigwx(text):
+def _parse_sigwx_lines(text):
     groups, order = {}, []
     for s in _data_lines(text):
         toks = [t for t in re.split(r'[,\t ]+', s) if t]
@@ -489,3 +489,72 @@ def parse_sigwx(text):
             order.append(key)
         groups[key]['points'] += pts
     return [groups[k] for k in order]
+
+
+def _latlon_pairs(v):
+    """pt 값에서 (위도, 경도) 쌍을 뽑는다. 문자열·[[a,b],…]·[{lat,lon}|{x,y},…]·[a,b,a,b…] 지원. 한반도 범위가 아니면 버린다(지도 좌표 등)."""
+    raw = []
+    if isinstance(v, str):
+        nums = [float(x) for x in re.findall(r'-?\d+(?:\.\d+)?', v)]
+        raw = list(zip(nums[0::2], nums[1::2]))
+    elif isinstance(v, (list, tuple)):
+        if v and all(isinstance(x, (int, float)) for x in v):
+            raw = list(zip(v[0::2], v[1::2]))
+        else:
+            for x in v:
+                if isinstance(x, (list, tuple)) and len(x) >= 2 and all(isinstance(y, (int, float)) for y in x[:2]):
+                    raw.append((x[0], x[1]))
+                elif isinstance(x, dict):
+                    a = x.get('lat', x.get('LAT')); b = x.get('lon', x.get('LON', x.get('lng')))
+                    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+                        raw.append((a, b))
+                elif isinstance(x, str):
+                    raw += _latlon_pairs(x)
+    out = []
+    for a, b in raw:
+        if 30 <= a <= 45 and 115 <= b <= 135:
+            out.append({'lat': float(a), 'lon': float(b)})
+        elif 115 <= a <= 135 and 30 <= b <= 45:
+            out.append({'lat': float(b), 'lon': float(a)})
+    return out
+
+
+def _walk_sigwx(o, found):
+    if isinstance(o, dict):
+        if 'pt' in o and any(k in o for k in ('item_type', 'item_name', 'label', 'contour_name')):
+            found.append(o)
+        else:
+            for v in o.values():
+                _walk_sigwx(v, found)
+    elif isinstance(o, list):
+        for v in o:
+            _walk_sigwx(v, found)
+
+
+def parse_sigwx(text, issued=None):
+    """저고도 중요기상예보. issued: 조회한 발표시각 tmfc(UTC, YYYYMMDDHH). JSON(출력 변수 item_type·item_name·label·pt)을 우선 해석하고, 아니면 텍스트 행 형식으로 해석한다."""
+    iso_issued = None
+    if issued and re.fullmatch(r'\d{10}', str(issued)):
+        iso_issued = datetime.strptime(str(issued), '%Y%m%d%H').replace(tzinfo=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    out = []
+    src = str(text or '').strip()
+    if src[:1] in '[{':
+        try:
+            found = []
+            _walk_sigwx(_json.loads(src), found)
+        except ValueError:
+            found = []
+        for o in found:
+            pts = _latlon_pairs(o.get('pt'))
+            if not pts:
+                continue
+            label = ' '.join(str(o.get(k) or '') for k in ('item_name', 'label', 'item_type')).strip() or '기타'
+            kind = _sigwx_kind(str(o.get('item_type') or '') + ' ' + label)
+            out.append({'kind': kind, 'label': label, 'issued': iso_issued, 'points': pts})
+        if out:
+            return out
+    out = _parse_sigwx_lines(text)
+    if iso_issued:
+        for x in out:
+            x['issued'] = x['issued'] or iso_issued
+    return out
