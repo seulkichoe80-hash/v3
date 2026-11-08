@@ -42,7 +42,7 @@ function askCode() {
   });
 }
 
-const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to', notamShared: false, slots: {}, slotCount: 2, openSlots: new Set(), places: [], placesShared: false,
+const state = { config: null, kakao: null, map: null, geocoder: null, placeSvc: null, overlays: [], last: null, clickTarget: 'to', notamShared: false, slots: {}, slotCount: 2, openSlots: new Set(), favs: [], placesShared: false,
   points: [{ role: 'from', name: '', lat: null, lon: null, text: '', stayMin: 0 }, { role: 'to', name: '', lat: null, lon: null, text: '', stayMin: 0 }] };
 
 // ---------- 시작 ----------
@@ -118,7 +118,7 @@ function loadKakao(key) {
         state.map = new k.Map($('map'), { center: new k.LatLng(36.4, 127.8), level: 12 });
         state.map.addControl(new k.ZoomControl(), k.ControlPosition.RIGHT);
         state.geocoder = new k.services.Geocoder();
-        state.places = new k.services.Places();
+        state.placeSvc = new k.services.Places();
         k.event.addListener(state.map, 'click', (e) => {
           const which = state.clickTarget;
           const ll = e.latLng;
@@ -218,7 +218,7 @@ function setPointByKey(k, place) {
 
 function matchPlaces(q) {
   const t = q.trim().toLowerCase(); if (!t) return [];
-  return state.places.filter((p) => (p.name + ' ' + (p.memo || '')).toLowerCase().includes(t)).slice(0, 8);
+  return state.favs.filter((p) => (p.name + ' ' + (p.memo || '')).toLowerCase().includes(t)).slice(0, 8);
 }
 
 function setupSearch(k) {
@@ -236,9 +236,10 @@ function setupSearch(k) {
     t = setTimeout(() => {
       const query = q.value.trim();
       const favs = matchPlaces(query);
-      const draw = (kakao) => {
+      const draw = (kakao, note = '') => {
         list.innerHTML = favs.map((p, i) => `<li tabindex="0" class="fav" data-f="${i}">★ ${esc(p.name)}<small>${esc(p.memo || '')} ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</small></li>`).join('')
-          + kakao.map((d, i) => `<li tabindex="0" data-i="${i}">${esc(d.place_name)}<small>${esc(d.road_address_name || d.address_name)}</small></li>`).join('');
+          + kakao.map((d, i) => `<li tabindex="0" data-i="${i}">${esc(d.place_name)}<small>${esc(d.road_address_name || d.address_name)}</small></li>`).join('')
+          + (note ? `<li class="empty"><small>${esc(note)}</small></li>` : '');
         list.querySelectorAll('li').forEach((li) => {
           const pick = () => {
             if (li.dataset.f !== undefined) { const p = favs[+li.dataset.f]; setPointByKey(k, { name: p.name, lat: p.lat, lon: p.lon }); }
@@ -249,9 +250,16 @@ function setupSearch(k) {
         });
       };
       if (query.length < 1) { list.innerHTML = ''; return; }
-      draw([]);
-      if (!state.places || !state.kakao || query.length < 2) return;
-      state.places.keywordSearch(query, (data, st) => { if (st === state.kakao.services.Status.OK) draw(data.slice(0, 8)); });
+      if (!state.placeSvc || !state.kakao) { draw([], favs.length ? '' : '카카오 장소검색 불가(지도 미연결) — 주요지점 또는 좌표 직접 입력 사용'); return; }
+      if (query.length < 2) { draw([], favs.length ? '' : '두 글자 이상 입력'); return; }
+      draw([], '검색 중…');
+      state.placeSvc.keywordSearch(query, (data, st) => {
+        if (q.value.trim() !== query) return;                       // 그 사이 검색어가 바뀜
+        const S = state.kakao.services.Status;
+        if (st === S.OK) draw(data.slice(0, 8));
+        else if (st === S.ZERO_RESULT) draw([], favs.length ? '' : '검색 결과 없음');
+        else draw([], '카카오 검색 오류 — 잠시 후 다시 시도');
+      });
     }, 250);
   });
 }
@@ -265,7 +273,7 @@ async function loadPlaces() {
     shared = !!d.shared; list = d.places || [];
   } catch (e) { err = e.message; }
   if (!shared) list = store.get(PLACES_KEY, []);
-  state.placesShared = shared; state.places = list;
+  state.placesShared = shared; state.favs = list;
   $('places-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})` : shared ? '상황실 공유 저장' : '공유 저장소 미연결 — 이 브라우저에만 저장';
   renderPlaces();
 }
@@ -280,13 +288,13 @@ function updatePlaceFrom() {
 
 function renderPlaces() {
   const q = $('place-q').value.trim().toLowerCase();
-  const items = state.places.filter((p) => !q || (p.name + ' ' + (p.memo || '')).toLowerCase().includes(q));
-  $('places-count').textContent = `(${state.places.length})`;
+  const items = state.favs.filter((p) => !q || (p.name + ' ' + (p.memo || '')).toLowerCase().includes(q));
+  $('places-count').textContent = `(${state.favs.length})`;
   $('place-list').innerHTML = items.length ? items.map((p) => `<li data-id="${esc(p.id)}"><button type="button" class="pick" title="선택된 지점(이 지점)에 넣기">★ ${esc(p.name)}
       <small>${esc(formatCoord(p, fmtNow()))}${p.memo ? ' · ' + esc(p.memo) : ''}</small></button><button type="button" class="mini del">삭제</button></li>`).join('')
-    : `<li><small>${state.places.length ? '검색 결과 없음' : '등록된 주요지점이 없습니다'}</small></li>`;
+    : `<li><small>${state.favs.length ? '검색 결과 없음' : '등록된 주요지점이 없습니다'}</small></li>`;
   $('place-list').querySelectorAll('li[data-id]').forEach((li) => {
-    const p = state.places.find((x) => x.id === li.dataset.id);
+    const p = state.favs.find((x) => x.id === li.dataset.id);
     li.querySelector('.pick').addEventListener('click', () => setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }));
     li.querySelector('.del').addEventListener('click', async () => {
       if (!confirm(`주요지점 "${p.name}"을(를) 삭제할까요?${state.placesShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
@@ -299,19 +307,19 @@ async function savePlace(p) {
   if (state.placesShared) {
     const r = await api('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error || r.status);
-    state.places = [...state.places.filter((x) => x.id !== d.place.id), d.place].sort((a, b) => (a.name < b.name ? -1 : 1));
+    state.favs = [...state.favs.filter((x) => x.id !== d.place.id), d.place].sort((a, b) => (a.name < b.name ? -1 : 1));
   } else {
     if (!p.name || p.name.length > 50) throw new Error('이름은 1~50자');
     const rec = { ...p, id: Math.random().toString(16).slice(2, 14), savedAt: new Date().toISOString() };
-    state.places = [...state.places, rec].sort((a, b) => (a.name < b.name ? -1 : 1)); store.set(PLACES_KEY, state.places);
+    state.favs = [...state.favs, rec].sort((a, b) => (a.name < b.name ? -1 : 1)); store.set(PLACES_KEY, state.favs);
   }
   renderPlaces();
 }
 
 async function deletePlace(id) {
   if (state.placesShared) { const r = await api(`/api/places/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (!r.ok) throw new Error(r.status); }
-  state.places = state.places.filter((x) => x.id !== id);
-  if (!state.placesShared) store.set(PLACES_KEY, state.places);
+  state.favs = state.favs.filter((x) => x.id !== id);
+  if (!state.placesShared) store.set(PLACES_KEY, state.favs);
   renderPlaces();
 }
 

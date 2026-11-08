@@ -129,4 +129,5 @@ python server/check_api.py
 npm test                                   # 판정·NOTAM·지리 계산 (node 22)
 python -m unittest discover -s tests/py    # 기상청 응답 해석·서버
 node tests/e2e/smoke.mjs                   # 화면 점검 (Playwright)
+node tests/e2e/kakao.mjs                   # 카카오 연동 점검 (가짜 SDK로 장소검색·Enter 선택)
 ```

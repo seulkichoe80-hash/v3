@@ -185,3 +185,5 @@ body.coords-on .place .loc { display: none; }
 .top h1 .formal { font-size: 13px; font-weight: 600; color: #b9c6d3; margin-left: 8px; }
 .place-add select { margin-top: 6px; }
 .place .loc { color: var(--ink); }
+.map-off[hidden] { display: none; }
+.results li.empty { cursor: default; color: var(--muted); }
