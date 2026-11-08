@@ -1,0 +1,29 @@
+{
+  "limits": {
+    "basis": "119항공대 운영 규정 제21조①",
+    "day":   { "land": { "visM": 3200, "ceilFt": 1000 }, "sea": { "visM": 4800, "ceilFt": 1500 } },
+    "night": { "land": { "visM": 4800, "ceilFt": 2000 }, "sea": { "visM": 4800, "ceilFt": 2000 } },
+    "cautionFactor": 1.5
+  },
+  "radius": { "metarNm": 30, "asosKm": 25, "lightningKm": 20, "notamNearNm": 5 },
+  "freshnessMin": { "metar": 90, "asos": 90, "aws": 20, "lightning": 30 },
+  "cruiseKt": 110,
+  "bases": [],
+  "airports": [
+    { "icao": "RKSI", "name": "인천", "lat": 37.4602, "lon": 126.4407 },
+    { "icao": "RKSS", "name": "김포", "lat": 37.5583, "lon": 126.7906 },
+    { "icao": "RKPC", "name": "제주", "lat": 33.5113, "lon": 126.4930 },
+    { "icao": "RKPK", "name": "김해", "lat": 35.1795, "lon": 128.9382 },
+    { "icao": "RKTN", "name": "대구", "lat": 35.8941, "lon": 128.6589 },
+    { "icao": "RKTU", "name": "청주", "lat": 36.7166, "lon": 127.4991 },
+    { "icao": "RKNY", "name": "양양", "lat": 38.0613, "lon": 128.6692 },
+    { "icao": "RKNW", "name": "원주", "lat": 37.4381, "lon": 127.9604 },
+    { "icao": "RKJB", "name": "무안", "lat": 34.9914, "lon": 126.3828 },
+    { "icao": "RKJJ", "name": "광주", "lat": 35.1264, "lon": 126.8089 },
+    { "icao": "RKJY", "name": "여수", "lat": 34.8423, "lon": 127.6170 },
+    { "icao": "RKPU", "name": "울산", "lat": 35.5935, "lon": 129.3518 },
+    { "icao": "RKTH", "name": "포항", "lat": 35.9879, "lon": 129.4203 },
+    { "icao": "RKPS", "name": "사천", "lat": 35.0886, "lon": 128.0704 },
+    { "icao": "RKJK", "name": "군산", "lat": 35.9038, "lon": 126.6158 }
+  ]
+}

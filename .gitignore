@@ -1,0 +1,5 @@
+config.local.json
+logs/
+node_modules/
+__pycache__/
+.superpowers/
