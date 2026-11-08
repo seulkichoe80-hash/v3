@@ -14,6 +14,7 @@ for (let i = 0; i < 40; i++) { try { await fetch(`http://localhost:${PORT}/api/c
 // 카카오 키가 있어야 SDK를 부르므로 client-config 응답에 시험용 키를 넣는다
 const browser = await pw.chromium.launch(); const page = await browser.newPage();
 const errors = []; page.on('pageerror', (e) => errors.push(String(e)));
+page.on('console', (m) => { if (/Content Security Policy|violates the following/i.test(m.text())) errors.push('CSP: ' + m.text().slice(0, 160)); });
 await page.route('**/api/client-config', async (route) => { const r = await route.fetch(); const j = await r.json(); j.kakaoJsKey = 'TESTKEY'; route.fulfill({ json: j }); });
 await page.route(/dapi\.kakao\.com\/v2\/maps\/sdk\.js/, (r) => r.fulfill({ contentType: 'text/javascript', body: readFileSync(ROOT + 'tests/e2e/kakao_stub.js', 'utf8') }));
 await page.goto(`http://localhost:${PORT}/`);

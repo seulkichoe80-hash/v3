@@ -3,7 +3,7 @@
 - UpstashStore: Vercel 연결 Upstash Redis(REST). 환경변수 KV_REST_API_URL/TOKEN 등(접두어 자동 인식)
 - FileStore: 로컬 실행판(logs/notams.json)
 - MemoryStore: 테스트"""
-import json, math, os, threading, urllib.request, uuid
+import json, math, os, threading, time, urllib.request, uuid
 from datetime import datetime, timezone
 
 MAX_SLOTS = 10
@@ -26,6 +26,22 @@ def _check(slot, text=''):
 
 class _Ops:
     """NOTAM 칸·주요지점 기능. 하위 클래스가 hall/hset/hdel을 구현한다."""
+
+    # 호출 제한(접속코드 오입력) 카운터: 기본은 프로세스 메모리, UpstashStore는 Redis(INCR+EXPIRE)
+    def _rl_map(self):
+        return self.__dict__.setdefault('_rl', {})
+
+    def rl_count(self, key):
+        c, exp = self._rl_map().get(key, (0, 0))
+        return c if exp > time.time() else 0
+
+    def rl_hit(self, key, ttl):
+        c, exp = self._rl_map().get(key, (0, 0))
+        now = time.time()
+        if exp <= now:
+            c, exp = 0, now + ttl
+        self._rl_map()[key] = (c + 1, exp)
+        return c + 1
 
     # NOTAM 칸
     def list(self):
@@ -157,6 +173,16 @@ class UpstashStore(_Ops):
 
     def hdel(self, key, field):
         self._cmd('HDEL', key, field)
+
+    def rl_count(self, key):
+        v = self._cmd('GET', key)
+        return int(v) if v is not None else 0
+
+    def rl_hit(self, key, ttl):
+        n = int(self._cmd('INCR', key))
+        if n == 1:
+            self._cmd('EXPIRE', key, ttl)
+        return n
 
 
 def store_from_env(env=os.environ):

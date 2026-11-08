@@ -21,7 +21,8 @@ class handler(BaseHTTPRequestHandler):
         body = self.rfile.read(min(n, 30000)) if n else b''
         status, headers, out = handle_api(method, self.path, dict(self.headers), body, client=CLIENT, config=CONFIG,
                                           kakao_js_key=os.environ.get('KAKAO_JS_KEY', ''),
-                                          access_code=os.environ.get('ACCESS_CODE', ''), log_path=None, notam_store=STORE)
+                                          access_code=os.environ.get('ACCESS_CODE', ''), log_path=None, notam_store=STORE,
+                                          client_ip=(self.headers.get('x-forwarded-for') or self.headers.get('x-real-ip') or '').split(',')[0].strip())
         self.send_response(status)
         for k, v in headers.items():
             self.send_header(k, v)

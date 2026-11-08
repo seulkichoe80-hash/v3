@@ -17,6 +17,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, de
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' && !/dapi\.kakao|ERR_|Failed to load resource/.test(m.text())) errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(String(e)));
+const csp = []; page.on('console', (m) => { if (/Content Security Policy|violates the following/i.test(m.text())) csp.push(m.text().slice(0, 160)); });
 await page.route(/dapi\.kakao\.com/, (r) => r.abort());
 await page.goto(`http://localhost:${PORT}/`);
 await page.waitForSelector('#code-gate:not([hidden])', { timeout: 10000 }).catch(() => fail('접속코드 입력 창이 보이지 않음'));
@@ -124,6 +125,7 @@ const hist = await page.evaluate(() => JSON.parse(localStorage.getItem('heliwx.h
 if (hist.length < 1 || hist[0].to !== '서울역') fail('브라우저 이력 저장 안 됨');
 const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.click('#history-csv')]);
 if (!dl) fail('이력 CSV 내려받기 안 됨');
+if (csp.length) fail('CSP 위반: ' + csp.join(' / '));
 if (errors.length) fail('콘솔 오류: ' + errors.join(' / '));
 if (process.env.SHOT) await page.screenshot({ path: ROOT + process.env.SHOT, fullPage: true });
 console.log('PASS grade=' + grade);

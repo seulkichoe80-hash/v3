@@ -10,9 +10,31 @@ TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=u
 SHARED_CACHE_SEC = {'sigwx': 600, 'metar': 180, 'taf': 300, 'asos': 180, 'aws': 60, 'warn': 120, 'lightning': 60}
 JSON_T = 'application/json; charset=utf-8'
 
+# 보안 헤더(vercel.json의 headers와 같아야 하며 시험으로 확인한다). CSP는 먼저 감시 모드(Report-Only)로 배포해 위반 여부를 확인한 뒤 강제 모드로 바꾼다.
+CSP_HEADER_NAME = 'Content-Security-Policy-Report-Only'
+CSP = ("default-src 'self'; "
+       "script-src 'self' https://dapi.kakao.com https://t1.kakaocdn.net https://t1.daumcdn.net; "
+       "style-src 'self' 'unsafe-inline'; "
+       "img-src 'self' data: blob: https:; "
+       "connect-src 'self' https://dapi.kakao.com; "
+       "font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+SECURITY_HEADERS = {
+    CSP_HEADER_NAME: CSP,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), camera=(), microphone=(), payment=(), usb=()',
+}
 
-def _json(status, obj, cache='no-store'):
-    return status, {'Content-Type': JSON_T, 'Cache-Control': cache}, json.dumps(obj, ensure_ascii=False).encode('utf-8')
+# 접속코드 오입력 제한: 같은 IP에서 RL_WINDOW초 안에 RL_MAX_FAILS번 틀리면 그 시간 동안 잠금(맞는 코드도 거부)
+RL_MAX_FAILS = 10
+RL_WINDOW = 600
+_FALLBACK_RL = None
+
+
+def _json(status, obj, cache='no-store', extra=None):
+    h = {'Content-Type': JSON_T, 'Cache-Control': cache, **SECURITY_HEADERS, **(extra or {})}
+    return status, h, json.dumps(obj, ensure_ascii=False).encode('utf-8')
 
 
 def _hdr(headers, name):
@@ -22,7 +44,16 @@ def _hdr(headers, name):
     return None
 
 
-def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None, notam_store=None):
+def _same_origin(headers):
+    from urllib.parse import urlparse
+    origin = _hdr(headers, 'Origin')
+    if not origin:
+        return True      # 서버끼리 호출·직접 접속 등 Origin이 없는 요청
+    host = _hdr(headers, 'X-Forwarded-Host') or _hdr(headers, 'Host') or ''
+    return urlparse(origin).netloc == host.split(',')[0].strip()
+
+
+def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None, notam_store=None, client_ip=''):
     """→ (status, headers, body bytes). access_code가 비어 있으면 접속코드 없이 개방."""
     from urllib.parse import parse_qs
     path, _, qs = path.partition('?')
@@ -30,11 +61,29 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
     if method == 'GET' and path == '/api/client-config':
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
                            'serverLog': bool(log_path), 'notamShared': notam_store is not None})
+    if method not in ('GET', 'HEAD') and not _same_origin(headers):
+        return _json(403, {'error': '허용되지 않은 출처의 요청입니다'})
     if access_code:
+        global _FALLBACK_RL
+        if _FALLBACK_RL is None:
+            from .store import MemoryStore
+            _FALLBACK_RL = MemoryStore()
+        rl = notam_store if hasattr(notam_store, 'rl_hit') else _FALLBACK_RL
+        rkey = 'heliwx:rl:' + (client_ip or 'unknown')
+        try:
+            locked = rl.rl_count(rkey) >= RL_MAX_FAILS
+        except Exception:
+            locked = False                      # 저장소 장애 시에는 잠금 확인을 건너뜀(정상 사용자 차단 방지)
+        if locked:
+            return _json(429, {'error': f'접속코드 오입력 횟수를 초과했습니다. {RL_WINDOW // 60}분 뒤에 다시 시도하세요'}, extra={'Retry-After': str(RL_WINDOW)})
         given = _hdr(headers, 'X-Access-Code') or _hdr(headers, 'X-Access-Token') or ''
         if not given and path.startswith('/api/raw/'):   # 점검 주소는 브라우저에서 ?code= 로도 열 수 있게
             given = path_q.get('code', [''])[0]
         if not hmac.compare_digest(given.encode('utf-8'), access_code.encode('utf-8')):
+            try:
+                rl.rl_hit(rkey, RL_WINDOW)
+            except Exception:
+                pass
             return _json(401, {'error': '접속코드가 필요합니다'})
     if path == '/api/notams' or path.startswith('/api/notams/'):
         return _notams(method, path, body, notam_store)
@@ -144,7 +193,7 @@ def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127
 
         def _send(self, status, headers, body):
             self.send_response(status)
-            for k, v in headers.items():
+            for k, v in {**SECURITY_HEADERS, **headers}.items():
                 self.send_header(k, v)
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
@@ -154,7 +203,8 @@ def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127
             n = int(self.headers.get('Content-Length', 0) or 0)
             body = self.rfile.read(min(n, 30000)) if n else b''
             self._send(*handle_api(method, self.path, dict(self.headers), body, client=client, config=config,
-                                   kakao_js_key=kakao_js_key, access_code=access_code, log_path=log_path, notam_store=notam_store))
+                                   kakao_js_key=kakao_js_key, access_code=access_code, log_path=log_path, notam_store=notam_store,
+                                   client_ip=self.client_address[0]))
 
         def do_GET(self):
             path = self.path.split('?')[0]

@@ -26,6 +26,7 @@ async function api(path, opts = {}) {
   const code = store.get(CODE_KEY, '');
   if (code) headers['X-Access-Code'] = code;
   const r = await fetch(path, { ...opts, headers });
+  if (r.status === 429) { const d = await r.clone().json().catch(() => ({})); showGate(d.error || '접속코드 오입력 횟수를 초과했습니다. 잠시 후 다시 시도하세요.'); throw new Error('접속코드 잠금'); }
   if (r.status === 401) { store.set(CODE_KEY, ''); showGate('접속코드가 올바르지 않습니다. 다시 입력하세요.'); throw new Error('접속코드 필요'); }
   return r;
 }
@@ -37,7 +38,8 @@ function askCode() {
       e.preventDefault();
       store.set(CODE_KEY, $('code-input').value.trim());
       const r = await fetch('/api/warn', { headers: { 'X-Access-Code': store.get(CODE_KEY, '') } }).catch(() => null);
-      if (r && r.status !== 401) { $('code-gate').hidden = true; $('code-input').value = ''; resolve(); }
+      if (r && r.status === 429) { store.set(CODE_KEY, ''); const d = await r.json().catch(() => ({})); $('code-msg').textContent = d.error || '오입력 횟수를 초과했습니다. 잠시 후 다시 시도하세요.'; }
+      else if (r && r.status !== 401) { $('code-gate').hidden = true; $('code-input').value = ''; resolve(); }
       else { store.set(CODE_KEY, ''); $('code-msg').textContent = '접속코드가 올바르지 않습니다.'; }
     };
   });
@@ -53,7 +55,7 @@ async function init() {
   const cc = await (await fetch('/api/client-config')).json();
   state.config = cc.config; state.serverLog = cc.serverLog;
   if (cc.needsCode) {
-    const ok = store.get(CODE_KEY, '') && (await fetch('/api/warn', { headers: { 'X-Access-Code': store.get(CODE_KEY, '') } }).then((r) => r.status !== 401).catch(() => false));
+    const ok = store.get(CODE_KEY, '') && (await fetch('/api/warn', { headers: { 'X-Access-Code': store.get(CODE_KEY, '') } }).then((r) => r.status !== 401 && r.status !== 429).catch(() => false));
     if (!ok) await askCode();
   }
   $('history-csv').addEventListener('click', downloadHistory);
