@@ -1,5 +1,5 @@
 // NOTAM 해석기: D 시리즈만 확인 대상, 구역 좌표는 E) 우선(도분초), 실패 시 Q-line(도분) 근사
-import { pointToSegmentKm, KM_PER_NM } from './geo.js';
+import { pointToRouteKm, KM_PER_NM } from './geo.js';
 
 const START_RE = /\(?\s*([A-Z]\d{4}\/\d{2})\s+NOTAM\s?[NRC]\b/g;
 export const QCODE_TEXT = {
@@ -64,13 +64,17 @@ export function parseNotam(raw) {
 }
 
 export function assessNotam(n, routeA, routeB, departUtc, arriveUtc, nearNm = 5) {
+  return assessNotamRoute(n, [routeA, routeB], departUtc, arriveUtc, nearNm);
+}
+
+export function assessNotamRoute(n, route, departUtc, arriveUtc, nearNm = 5) {
   const out = { ...n, inScope: !n.id || n.series === 'D', distanceNm: null, relation: 'UNKNOWN', activeDuringFlight: null, grade: 'NA' };
   if (n.start) {
     const endOk = n.endPerm || !n.end || n.end >= departUtc;
     out.activeDuringFlight = n.start <= arriveUtc && endOk;
   }
   if (n.center) {
-    out.distanceNm = pointToSegmentKm(n.center, routeA, routeB) / KM_PER_NM - (n.radiusNm || 0);
+    out.distanceNm = pointToRouteKm(n.center, route) / KM_PER_NM - (n.radiusNm || 0);
     out.relation = out.distanceNm <= 0 ? 'CROSS' : out.distanceNm <= nearNm ? 'NEAR' : 'CLEAR';
   }
   if (!n.id) out.grade = 'NA';

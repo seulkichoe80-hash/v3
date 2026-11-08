@@ -36,3 +36,13 @@ test('isNightDuring', () => {
 test('I2 isNightDuring 잘못된 시각 → 멈추지 않고 true(엄격)', () => {
   assert.equal(isNightDuring(seoul, seoul, kst('2026-11-08T12:00:00'), new Date(NaN)), true);
 });
+import { pointToRouteKm, routeLengthKm, sampleRouteMulti, isNightDuringRoute } from '../../web/geo.js';
+test('다구간 경로', () => {
+  const a = { lat: 37, lon: 127 }, b = { lat: 37, lon: 128 }, c = { lat: 38, lon: 128 };
+  assert.ok(Math.abs(routeLengthKm([a, b, c]) - (distanceKm(a, b) + distanceKm(b, c))) < 1e-6);
+  assert.ok(pointToRouteKm({ lat: 37.5, lon: 128 }, [a, b, c]) < 0.5);
+  assert.ok(pointToRouteKm({ lat: 37.5, lon: 128 }, [a, c]) > 5);
+  const pts = sampleRouteMulti([a, b, c], 10); assert.ok(pts.length > 15);
+  assert.equal(isNightDuringRoute([seoul, busan], kst('2026-11-08T12:00:00'), kst('2026-11-08T12:30:00')), false);
+  assert.equal(isNightDuringRoute([seoul, busan], kst('2026-11-08T12:00:00'), new Date(NaN)), true);
+});

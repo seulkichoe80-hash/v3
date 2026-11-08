@@ -1,6 +1,6 @@
 // 119항공대 운영 규정 제21조 기준 판정 엔진 (순수 함수). 시스템은 조언만 하며 최종 판단은 통제관·기장.
-import { distanceKm, pointToSegmentKm, KM_PER_NM } from './geo.js';
-import { assessNotam } from './notam.js';
+import { distanceKm, pointToRouteKm, KM_PER_NM } from './geo.js';
+import { assessNotamRoute } from './notam.js';
 
 export const PROVISO = '제21조① 단서 — 긴급운항 시 즉시 통제관 보고, 기종별 교범 운용한계 내에서 조종사 의견 청취 후 통제관 판단';
 const RANK = { RED: 3, YELLOW: 2, NA: 1, GREEN: 0 };
@@ -42,7 +42,7 @@ function nearest(items, p, maxKm) {
   }
   return best;
 }
-const alongRoute = (items, a, b, maxKm) => items.filter((it) => has(it) && pointToSegmentKm(it, a, b) <= maxKm);
+const alongRoute = (items, route, maxKm) => items.filter((it) => has(it) && pointToRouteKm(it, route) <= maxKm);
 
 // 관측 하나가 '운고 정보'를 가지고 있는지(구름 적음 = 운고 없음과 결측을 구분)
 const hasCeilInfo = (o) => (o.ceilUnknown ? false : o.icao ? o.visM !== null && o.visM !== undefined : o.cloudTenths !== null && o.cloudTenths !== undefined);
@@ -128,13 +128,13 @@ function warnRows(warns, regions, status, regionsAvailable, seaRoute) {
   return rows;
 }
 
-function lightningRow(items, a, b, input) {
+function lightningRow(items, route, input) {
   const { config, now, dataStatus = {} } = input;
   const base = { segment: '경로', item: '낙뢰', limit: `${config.radius.lightningKm}km 이내 없음`, source: '기상청 낙뢰', obsTime: null };
   if (dataStatus.lightning === 'stale') return { ...base, value: '-', grade: 'NA', note: '낙뢰 자료 오래됨 — 레이더 직접 확인' };
   if (dataStatus.lightning === 'error') return { ...base, value: '-', grade: 'NA', note: '낙뢰 자료 수신 실패 — 레이더 직접 확인' };
   const near = items.filter((l) => ageMin(l.time, now) <= config.freshnessMin.lightning && has(l))
-    .map((l) => pointToSegmentKm(l, a, b)).filter((d) => d <= config.radius.lightningKm);
+    .map((l) => pointToRouteKm(l, route)).filter((d) => d <= config.radius.lightningKm);
   if (!near.length) return { ...base, value: '없음', grade: 'GREEN', note: '' };
   return { ...base, value: `${near.length}회 (최근접 ${Math.min(...near).toFixed(1)}km)`, grade: 'YELLOW', note: '뇌우 가능 — 경로 변경 검토(제21조②)' };
 }
@@ -156,27 +156,40 @@ function windInfo(segment, p, aws, metars, now, config) {
 }
 
 export function evaluate(input) {
-  const { from, to, departUtc, isNight, isSea, data, config, notams = [], notamsProvided = notams.length > 0, routeRegions = [], regionsAvailable = routeRegions.length > 0, seaRoute = false, dataStatus = {}, now } = input;
+  const { departUtc, isNight, isSea, data, config, notams = [], notamsProvided = notams.length > 0, routeRegions = [], regionsAvailable = routeRegions.length > 0, seaRoute = false, dataStatus = {}, now } = input;
   const cruiseKt = Number.isFinite(input.cruiseKt) && input.cruiseKt >= 40 && input.cruiseKt <= 250 ? input.cruiseKt : config.cruiseKt;
-  const distKm = distanceKm(from, to);
-  const durationMin = distKm === 0 ? 0 : (distKm / (cruiseKt * KM_PER_NM)) * 60;
-  const arriveUtc = new Date(departUtc.getTime() + durationMin * 60e3);
+  // 지점: points(출발·경유…·목적) 우선, 없으면 from/to
+  const pts = (input.points && input.points.length >= 2 ? input.points : [input.from, input.to]).map((p) => ({ ...p, stayMin: Math.max(0, Number(p.stayMin) || 0) }));
+  const segName = (i) => (i === 0 ? '출발지' : i === pts.length - 1 ? '목적지' : `경유지${i}`);
+  const legs = [];
+  let t = departUtc.getTime(), distKm = 0, totalStayMin = 0;
+  for (let i = 1; i < pts.length; i++) {
+    if (i > 1) { t += pts[i - 1].stayMin * 60e3; totalStayMin += pts[i - 1].stayMin; }
+    const d = distanceKm(pts[i - 1], pts[i]);
+    const m = d === 0 ? 0 : (d / (cruiseKt * KM_PER_NM)) * 60;
+    legs.push({ from: pts[i - 1].name, to: pts[i].name, distanceKm: Math.round(d * 10) / 10, durationMin: Math.round(m), departUtc: new Date(t), arriveUtc: new Date(t + m * 60e3) });
+    t += m * 60e3; distKm += d;
+  }
+  const arriveUtc = new Date(t);
+  const durationMin = (t - departUtc.getTime()) / 60e3;
   const limits = limitsFor(config, isNight, isSea);
   const metarKm = config.radius.metarNm * KM_PER_NM, asosKm = config.radius.asosKm;
   const metars = data.metar || [], asoss = data.asos || [];
 
   const pick = (p) => [nearest(metars, p, metarKm), nearest(asoss, p, asosKm)].filter(Boolean);
-  const routeObs = [...alongRoute(metars, from, to, metarKm), ...alongRoute(asoss, from, to, asosKm)];
+  const routeObs = [...alongRoute(metars, pts, metarKm), ...alongRoute(asoss, pts, asosKm)];
+  const pointRows = (i) => obsRows(segName(i), pick(pts[i]), limits, input);
   const rows = [
-    ...obsRows('출발지', pick(from), limits, input),
+    ...pointRows(0),
     ...obsRows('경로', routeObs, limits, input),
-    ...obsRows('목적지', pick(to), limits, input),
-    ...tafRows(alongRoute(data.taf || [], from, to, metarKm), limits, departUtc, arriveUtc),
+    ...pts.slice(1, -1).flatMap((_, k) => pointRows(k + 1)),
+    ...pointRows(pts.length - 1),
+    ...tafRows(alongRoute(data.taf || [], pts, metarKm), limits, departUtc, arriveUtc),
     ...warnRows(data.warn || [], routeRegions, dataStatus.warn, regionsAvailable, seaRoute),
-    lightningRow(data.lightning || [], from, to, input),
+    lightningRow(data.lightning || [], pts, input),
   ];
 
-  const assessed = notams.map((n) => assessNotam(n, from, to, departUtc, arriveUtc, config.radius.notamNearNm));
+  const assessed = notams.map((n) => assessNotamRoute(n, pts, departUtc, arriveUtc, config.radius.notamNearNm));
   const relevant = assessed.filter((n) => n.inScope && n.grade !== 'GREEN');
   if (!notamsProvided) rows.push({ segment: '경로', item: 'NOTAM', value: '미입력', limit: '경로 관련 없음', grade: 'NA', source: 'xNotam', obsTime: null, note: 'xNotam 조회 후 붙여넣기' });
   else if (!relevant.length) rows.push({ segment: '경로', item: 'NOTAM', value: `경로 관련 D NOTAM 없음 (입력 ${assessed.length}건)`, limit: '경로 관련 없음', grade: 'GREEN', source: 'xNotam', obsTime: null, note: '' });
@@ -186,11 +199,11 @@ export function evaluate(input) {
       note: n.needsPermission ? `소방헬기 사전허가 필요${n.phones.length ? ' ' + n.phones.join(', ') : ''}` : (n.parseError ? n.parseError + ' — 원문 확인' : '') });
   }
 
-  const wind = [windInfo('출발지', from, data.aws || [], metars, now, config), windInfo('목적지', to, data.aws || [], metars, now, config)];
+  const wind = pts.map((p, i) => windInfo(segName(i), p, data.aws || [], metars, now, config));
 
   const grades = rows.map((r) => r.grade);
   const hasNA = grades.includes('NA');
-  const coreNA = rows.some((r) => (r.segment === '출발지' || r.segment === '목적지') && (r.item === '시정' || r.item === '운고') && r.grade === 'NA');
+  const coreNA = rows.some((r) => r.segment !== '경로' && (r.item === '시정' || r.item === '운고') && r.grade === 'NA');
   let overall = grades.includes('RED') ? 'RED' : grades.includes('YELLOW') ? 'YELLOW' : coreNA ? 'NA' : 'GREEN';
   let overallNote = '';
   if (overall === 'RED') overallNote = PROVISO;
@@ -198,14 +211,16 @@ export function evaluate(input) {
   else if (overall === 'GREEN' && hasNA) overallNote = '단, 일부 자료 확인 필요';
 
   const result = { overall, overallNote, distanceKm: Math.round(distKm * 10) / 10, distanceNm: Math.round((distKm / KM_PER_NM) * 10) / 10,
-    durationMin: Math.round(durationMin), arriveUtc, limits, rows, wind, notams: assessed, hasNA };
+    durationMin: Math.round(durationMin), arriveUtc, limits, rows, wind, notams: assessed, hasNA, legs, totalStayMin, points: pts };
   result.reportText = buildReport(result, input);
   return result;
 }
 
 function buildReport(r, input) {
-  const { from, to, isNight, isSea } = input;
-  const parts = [`[운항기상 조언] ${from.name}→${to.name} ${r.distanceKm}km/${r.durationMin}분(도착 ${fmtKst(r.arriveUtc)})`,
+  const { isNight, isSea } = input;
+  const names = r.points.map((p, i) => (i > 0 && i < r.points.length - 1 ? '(경유)' : '') + p.name).join('→');
+  const stay = r.totalStayMin ? `체류 ${r.totalStayMin}분 포함, ` : '';
+  const parts = [`[운항기상 조언] ${names} ${r.distanceKm}km/${r.durationMin}분(${stay}도착 ${fmtKst(r.arriveUtc)})`,
     `종합: ${GRADE_TEXT[r.overall]}${r.overallNote ? ' (' + r.overallNote + ')' : ''}`,
     `적용기준 ${isNight ? '야간' : '주간'}·${isSea ? '해상' : '육상'} 시정 ${r.limits.visM}m·운고 ${r.limits.ceilFt}ft`];
   const dest = r.rows.filter((x) => x.segment === '목적지');

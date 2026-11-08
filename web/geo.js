@@ -66,3 +66,22 @@ export function isNightDuring(from, to, departUtc, arriveUtc) {
     if (tt.getTime() >= end) return false;
   }
 }
+
+// ---- 다구간(경유지) 경로 ----
+export function routeLengthKm(pts) {
+  let s = 0; for (let i = 1; i < pts.length; i++) s += distanceKm(pts[i - 1], pts[i]); return s;
+}
+export function pointToRouteKm(p, pts) {
+  if (pts.length === 1) return distanceKm(p, pts[0]);
+  let m = Infinity; for (let i = 1; i < pts.length; i++) m = Math.min(m, pointToSegmentKm(p, pts[i - 1], pts[i])); return m;
+}
+export function sampleRouteMulti(pts, stepKm = 10) {
+  const out = [];
+  for (let i = 1; i < pts.length; i++) { const s = sampleRoute(pts[i - 1], pts[i], stepKm); out.push(...(i === 1 ? s : s.slice(1))); }
+  return out.length ? out : pts.slice(0, 1);
+}
+export function isNightDuringRoute(pts, departUtc, arriveUtc) {
+  if (!Number.isFinite(departUtc?.getTime()) || !Number.isFinite(arriveUtc?.getTime())) return true;
+  for (let i = 0; i < pts.length; i++) if (isNightDuring(pts[i], pts[i], departUtc, arriveUtc)) return true;
+  return false;
+}

@@ -150,3 +150,29 @@ test('보고문에 값과 설명이 중복되지 않음', () => {
   const r = evaluate(base({ notamsProvided: false }));
   assert.ok(!/NOTAM 미입력 — NOTAM 미입력/.test(r.reportText), r.reportText);
 });
+// ---- 경유지 ----
+const wp = { name: '경유A', lat: 37.62, lon: 126.88, stayMin: 10 };
+test('경유지: 거리 합계·체류시간·구간표', () => {
+  const r = evaluate(base({ points: [from, wp, to] }));
+  assert.equal(r.legs.length, 2);
+  const sum = r.legs.reduce((a, l) => a + l.distanceKm, 0);
+  assert.ok(Math.abs(r.distanceKm - sum) < 0.2); assert.ok(r.distanceKm > 16);
+  assert.equal(r.totalStayMin, 10);
+  assert.ok(Math.abs(r.durationMin - (r.legs[0].durationMin + r.legs[1].durationMin + 10)) <= 1);
+  assert.ok(r.rows.some((x) => x.segment === '경유지1' && x.item === '시정'));
+  assert.match(r.reportText, /경유A/); assert.match(r.reportText, /체류 10분/);
+});
+test('경유지 0개면 from/to와 결과 동일', () => {
+  const a = evaluate(base()), b = evaluate(base({ points: [from, to] }));
+  assert.equal(a.overall, b.overall); assert.equal(a.distanceKm, b.distanceKm); assert.equal(a.rows.length, b.rows.length);
+});
+test('경유지 근처에만 있는 낙뢰·NOTAM도 감지', () => {
+  const far = { name: '멀리', lat: 37.9, lon: 127.3, stayMin: 0 };
+  const lt = [{ time: new Date(NOW.getTime() - 5 * 60e3).toISOString(), lat: 37.9, lon: 127.25 }];
+  assert.equal(evaluate(base({ data: { ...base().data, lightning: lt } })).rows.find((x) => x.item === '낙뢰').grade, 'GREEN');
+  assert.equal(evaluate(base({ points: [from, far, to], data: { ...base().data, lightning: lt } })).rows.find((x) => x.item === '낙뢰').grade, 'YELLOW');
+});
+test('경유지 바람 정보 포함', () => {
+  const r = evaluate(base({ points: [from, wp, to] }));
+  assert.deepEqual(r.wind.map((w) => w.segment), ['출발지', '경유지1', '목적지']);
+});

@@ -1,5 +1,6 @@
 // 화면 로직: 입력 → 자료 수집(/api/*) → 판정(judge.js) → 표시. 카카오맵이 없으면 좌표 직접 입력으로 계속 동작.
-import { distanceKm, sampleRoute, isNightDuring, KM_PER_NM } from './geo.js';
+import { distanceKm, sampleRouteMulti, isNightDuringRoute, routeLengthKm, KM_PER_NM } from './geo.js';
+import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
 import { evaluate, GRADE_TEXT, dirText } from './judge.js';
 
@@ -13,7 +14,7 @@ const kstStr = (d, withDate = false) => {
   return (withDate ? `${k.getUTCMonth() + 1}/${k.getUTCDate()} ` : '') + `${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
 };
 
-const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history';
+const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history', FMT_KEY = 'heliwx.coordfmt', MAX_VIA = 5;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 불가 환경 */ } },
@@ -41,7 +42,8 @@ function askCode() {
   });
 }
 
-const state = { config: null, kakao: null, map: null, geocoder: null, places: null, from: null, to: null, overlays: [], last: null };
+const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to',
+  points: [{ role: 'from', name: '', lat: null, lon: null, text: '', stayMin: 0 }, { role: 'to', name: '', lat: null, lon: null, text: '', stayMin: 0 }] };
 
 // ---------- 시작 ----------
 async function init() {
@@ -57,16 +59,13 @@ async function init() {
   showHistoryCount();
   $('cruise').value = cc.config.cruiseKt;
   $('depart').value = kstInputNow();
-  for (const [i, b] of (cc.config.bases || []).entries()) $('from-base').add(new Option(b.name, String(i)));
-  $('from-base').addEventListener('change', (e) => {
-    const b = state.config.bases[+e.target.value];
-    if (b) setPlace('from', { name: b.name, lat: b.lat, lon: b.lon });
-  });
+  const fmt = store.get(FMT_KEY, 'dd'); $('coord-fmt').value = ['dd', 'ddm', 'dms'].includes(fmt) ? fmt : 'dd';
+  $('coord-fmt').addEventListener('change', () => { store.set(FMT_KEY, $('coord-fmt').value); reformatAll(); });
+  $('add-via').addEventListener('click', addVia);
   for (const id of ['depart', 'cruise']) $(id).addEventListener('change', updateAuto);
-  for (const id of ['from-lat', 'from-lon', 'to-lat', 'to-lon']) $(id).addEventListener('change', updateAuto);
+  renderPoints();
   $('run').addEventListener('click', run);
   $('copy').addEventListener('click', copyReport);
-  setupSearch('from'); setupSearch('to');
   loadKakao(cc.kakaoJsKey);
 }
 
@@ -81,11 +80,8 @@ const departUtc = () => {
 
 // ---------- 카카오맵 ----------
 function kakaoFailed(msg) {
-  $('coord-fallback').hidden = false;
-  $('coord-fallback-wrap').open = true;
-  $('kakao-msg').textContent = msg;
   $('map-off').hidden = false;
-  $('map-off').textContent = msg + ' — 좌표 직접 입력으로 판단은 계속 가능합니다.';
+  $('map-off').textContent = msg + ' — 각 지점의 좌표칸에 직접 입력하면 판단은 계속 가능합니다.';
 }
 
 function loadKakao(key) {
@@ -104,14 +100,13 @@ function loadKakao(key) {
         state.map.addControl(new k.ZoomControl(), k.ControlPosition.RIGHT);
         state.geocoder = new k.services.Geocoder();
         state.places = new k.services.Places();
-        $('coord-fallback').hidden = false;
         k.event.addListener(state.map, 'click', (e) => {
-          const which = document.querySelector('input[name=clickset]:checked').value;
+          const which = state.clickTarget;
           const ll = e.latLng;
           const p = { name: `지도 지점(${ll.getLat().toFixed(4)}, ${ll.getLng().toFixed(4)})`, lat: ll.getLat(), lon: ll.getLng() };
           state.geocoder.coord2Address(p.lon, p.lat, (res, st) => {
             if (st === k.services.Status.OK && res[0]) p.name = (res[0].road_address || res[0].address).address_name;
-            setPlace(which, p);
+            setPointByKey(which, p);
           });
         });
       });
@@ -120,8 +115,88 @@ function loadKakao(key) {
   document.head.appendChild(s);
 }
 
-function setupSearch(which) {
-  const q = $(`${which}-q`), list = $(`${which}-results`);
+// ---------- 지점(출발·경유·목적) ----------
+const fmtNow = () => $('coord-fmt').value;
+function pointKeys() {
+  let v = 0; return state.points.map((p) => (p.role === 'via' ? `via${++v}` : p.role));
+}
+const roleLabel = (key) => (key === 'from' ? '출발지' : key === 'to' ? '목적지(현장)' : `경유지 ${key.slice(3)}`);
+
+function renderPoints() {
+  const keys = pointKeys();
+  if (!keys.includes(state.clickTarget)) state.clickTarget = 'to';
+  $('points').innerHTML = state.points.map((p, i) => {
+    const k = keys[i];
+    const base = p.role === 'from' && (state.config.bases || []).length
+      ? `<select id="pt-${k}-base" aria-label="출발 기지"><option value="">기지 선택</option>${state.config.bases.map((b, j) => `<option value="${j}">${esc(b.name)}</option>`).join('')}</select>` : '';
+    const tools = p.role === 'via' ? `<div class="tools">체류 <input id="pt-${k}-stay" class="stay" type="number" min="0" max="600" step="5" value="${p.stayMin || 0}" aria-label="체류시간(분)">분
+        <button type="button" data-act="up" data-i="${i}" aria-label="위로">▲</button><button type="button" data-act="down" data-i="${i}" aria-label="아래로">▼</button><button type="button" data-act="del" data-i="${i}">삭제</button></div>` : '';
+    return `<fieldset class="place ${p.role}" data-i="${i}"><legend>${roleLabel(k)}</legend>${base}
+      <div class="search"><input id="pt-${k}-q" type="search" placeholder="장소 검색" autocomplete="off"><ul class="results" id="pt-${k}-results"></ul></div>
+      <div class="row"><input id="pt-${k}-name" placeholder="이름" value="${esc(p.name)}"></div>
+      <div class="row"><input id="pt-${k}-coord" placeholder="${esc(COORD_PLACEHOLDER[fmtNow()])}" value="${esc(p.text)}" spellcheck="false" aria-label="${roleLabel(k)} 좌표"></div>
+      <div class="coord-msg" id="pt-${k}-msg"></div>${tools}
+      <label class="inline"><input type="radio" name="clickset" value="${k}" ${state.clickTarget === k ? 'checked' : ''}> 지도 클릭 → 이 지점</label></fieldset>`;
+  }).join('');
+  state.points.forEach((p, i) => wirePoint(p, keys[i]));
+  $('add-via').disabled = state.points.filter((p) => p.role === 'via').length >= MAX_VIA;
+  updateAuto(); drawRouteOnly();
+}
+
+function wirePoint(p, k) {
+  const coord = $(`pt-${k}-coord`);
+  const apply = () => {
+    p.text = coord.value;
+    const msg = $(`pt-${k}-msg`);
+    if (!p.text.trim()) { p.lat = p.lon = null; msg.textContent = ''; msg.className = 'coord-msg'; coord.classList.remove('bad'); return; }
+    const r = parseCoord(p.text, fmtNow());
+    if (r.error) { p.lat = p.lon = null; msg.textContent = '⚠ ' + r.error; msg.className = 'coord-msg err'; coord.classList.add('bad'); }
+    else {
+      p.lat = r.lat; p.lon = r.lon; coord.classList.remove('bad');
+      msg.textContent = `→ ${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}${r.warning ? ' · ' + r.warning : ''}`;
+      msg.className = 'coord-msg' + (r.warning ? ' warn' : '');
+    }
+    updateAuto(); drawRouteOnly();
+  };
+  coord.addEventListener('change', apply);
+  coord.addEventListener('blur', apply);
+  if (p.text) apply();
+  $(`pt-${k}-name`).addEventListener('input', (e) => { p.name = e.target.value; });
+  const stay = $(`pt-${k}-stay`); if (stay) stay.addEventListener('input', (e) => { p.stayMin = Math.max(0, Number(e.target.value) || 0); updateAuto(); });
+  const base = $(`pt-${k}-base`);
+  if (base) base.addEventListener('change', (e) => { const b = state.config.bases[+e.target.value]; if (b) setPointByKey(k, { name: b.name, lat: b.lat, lon: b.lon }); });
+  document.querySelectorAll(`fieldset[data-i] input[name=clickset][value="${k}"]`).forEach((r) => r.addEventListener('change', () => { state.clickTarget = k; }));
+  setupSearch(k);
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const i = +b.dataset.i, pts = state.points;
+  if (b.dataset.act === 'del') pts.splice(i, 1);
+  if (b.dataset.act === 'up' && pts[i - 1]?.role === 'via') [pts[i - 1], pts[i]] = [pts[i], pts[i - 1]];
+  if (b.dataset.act === 'down' && pts[i + 1]?.role === 'via') [pts[i + 1], pts[i]] = [pts[i], pts[i + 1]];
+  renderPoints();
+});
+
+function addVia() {
+  if (state.points.filter((p) => p.role === 'via').length >= MAX_VIA) return;
+  state.points.splice(state.points.length - 1, 0, { role: 'via', name: '', lat: null, lon: null, text: '', stayMin: 0 });
+  renderPoints();
+}
+
+function reformatAll() {
+  for (const p of state.points) if (Number.isFinite(p.lat) && Number.isFinite(p.lon)) p.text = formatCoord(p, fmtNow());
+  renderPoints();
+}
+
+function setPointByKey(k, place) {
+  const i = pointKeys().indexOf(k); if (i < 0) return;
+  Object.assign(state.points[i], { name: place.name, lat: place.lat, lon: place.lon, text: formatCoord(place, fmtNow()) });
+  renderPoints();
+}
+
+function setupSearch(k) {
+  const q = $(`pt-${k}-q`), list = $(`pt-${k}-results`);
   let t = null;
   q.addEventListener('input', () => {
     clearTimeout(t);
@@ -132,7 +207,7 @@ function setupSearch(which) {
         if (st !== state.kakao.services.Status.OK) return;
         list.innerHTML = data.slice(0, 8).map((d, i) => `<li tabindex="0" data-i="${i}">${esc(d.place_name)}<small>${esc(d.road_address_name || d.address_name)}</small></li>`).join('');
         list.querySelectorAll('li').forEach((li) => {
-          const pick = () => { const d = data[+li.dataset.i]; setPlace(which, { name: d.place_name, lat: +d.y, lon: +d.x }); list.innerHTML = ''; q.value = ''; };
+          const pick = () => { const d = data[+li.dataset.i]; setPointByKey(k, { name: d.place_name, lat: +d.y, lon: +d.x }); };
           li.addEventListener('click', pick);
           li.addEventListener('keydown', (e) => e.key === 'Enter' && pick());
         });
@@ -141,22 +216,14 @@ function setupSearch(which) {
   });
 }
 
-function setPlace(which, p) {
-  state[which] = p;
-  const c = $(`${which}-chosen`);
-  c.textContent = `${p.name} (${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})`;
-  c.classList.add('set');
-  $(`${which}-name`).value = p.name; $(`${which}-lat`).value = p.lat.toFixed(5); $(`${which}-lon`).value = p.lon.toFixed(5);
-  updateAuto();
-  drawRouteOnly();
-}
-
-function readPlace(which) {
-  const lat = parseFloat($(`${which}-lat`).value), lon = parseFloat($(`${which}-lon`).value);
-  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
-    return { name: $(`${which}-name`).value.trim() || (which === 'from' ? '출발지' : '목적지'), lat, lon };
-  }
-  return state[which];
+// 판단에 쓸 지점 목록(모두 좌표가 있어야 함)
+function readyPoints() {
+  const keys = pointKeys(), out = [], bad = [];
+  state.points.forEach((p, i) => {
+    if (Number.isFinite(p.lat) && Number.isFinite(p.lon)) out.push({ name: p.name.trim() || roleLabel(keys[i]).replace('(현장)', ''), lat: p.lat, lon: p.lon, stayMin: p.role === 'via' ? p.stayMin : 0 });
+    else bad.push(roleLabel(keys[i]));
+  });
+  return { pts: out, bad };
 }
 
 function cruiseKt() {
@@ -164,23 +231,23 @@ function cruiseKt() {
   return Number.isFinite(v) && v >= 40 && v <= 250 ? v : state.config.cruiseKt;
 }
 
-function flightTimes(from, to) {
+function flightTimes(pts) {
   const dep = departUtc();
-  const min = (distanceKm(from, to) / (cruiseKt() * KM_PER_NM)) * 60;
+  const min = (routeLengthKm(pts) / (cruiseKt() * KM_PER_NM)) * 60 + pts.reduce((a, p) => a + (p.stayMin || 0), 0);
   return { dep, arr: new Date(dep.getTime() + min * 60e3) };
 }
 
 function updateAuto() {
-  const from = readPlace('from'), to = readPlace('to');
-  if (!from || !to) return;
-  const { dep, arr } = flightTimes(from, to);
-  $('daynight-auto').textContent = '자동: ' + (isNightDuring(from, to, dep, arr) ? '야간' : '주간');
+  const { pts, bad } = readyPoints();
+  if (bad.length || pts.length < 2) { $('daynight-auto').textContent = ''; return; }
+  const { dep, arr } = flightTimes(pts);
+  $('daynight-auto').textContent = '자동: ' + (isNightDuringRoute(pts, dep, arr) ? '야간' : '주간');
 }
 
 // ---------- 경로 행정구역(특보 매칭·해상 판별) ----------
-function routeRegions(from, to) {
+function routeRegions(route) {
   if (!state.geocoder) return Promise.resolve({ regions: [], seaPoints: 0, available: false });
-  const pts = sampleRoute(from, to, 10);
+  const pts = sampleRouteMulti(route, 10);
   const step = Math.max(1, Math.ceil(pts.length / 30));
   const sel = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
   const k = state.kakao;
@@ -199,13 +266,14 @@ function routeRegions(from, to) {
 
 // ---------- 실행 ----------
 async function run() {
-  const from = readPlace('from'), to = readPlace('to');
-  if (!from || !to) { $('run-msg').textContent = '출발지와 목적지를 지정하세요.'; return; }
+  const { pts, bad } = readyPoints();
+  if (bad.length) { $('run-msg').textContent = `좌표가 없거나 형식이 틀린 지점: ${bad.join(', ')}`; return; }
+  const from = pts[0], to = pts[pts.length - 1];
   $('run').disabled = true; $('run-msg').textContent = '기상자료 수집 중…';
   try {
     const [settled, rr] = await Promise.all([
       Promise.allSettled(KINDS.map((k) => api('/api/' + k).then((r) => r.json()))),
-      routeRegions(from, to).catch(() => ({ regions: [], seaPoints: 0, available: false })),
+      routeRegions(pts).catch(() => ({ regions: [], seaPoints: 0, available: false })),
     ]);
     const data = {}, dataStatus = {}, warns = [];
     settled.forEach((s, i) => {
@@ -220,9 +288,9 @@ async function run() {
       }
     });
 
-    const { dep, arr } = flightTimes(from, to);
+    const { dep, arr } = flightTimes(pts);
     const dn = $('daynight').value, ls = $('landsea').value;
-    const isNight = dn === 'auto' ? isNightDuring(from, to, dep, arr) : dn === 'night';
+    const isNight = dn === 'auto' ? isNightDuringRoute(pts, dep, arr) : dn === 'night';
     const seaSuggest = rr.available && rr.seaPoints > 0;
     // 판별 불가 시 더 엄격한 해상 기준을 적용한다
     const isSea = ls === 'auto' ? (rr.available ? seaSuggest : true) : ls === 'sea';
@@ -231,16 +299,16 @@ async function run() {
 
     const text = $('notam-text').value;
     const result = evaluate({
-      from, to, departUtc: dep, cruiseKt: cruiseKt(), isNight, isSea, data, dataStatus,
+      points: pts, departUtc: dep, cruiseKt: cruiseKt(), isNight, isSea, data, dataStatus,
       regionsAvailable: rr.available, seaRoute: seaSuggest || (isSea && !rr.available),
       notams: splitNotams(text).map(parseNotam), notamsProvided: text.trim().length > 0,
       routeRegions: rr.regions, now: new Date(), config: state.config,
     });
-    state.last = { result, data, from, to };
-    render(result, { from, to, isNight, isSea, warns });
-    drawMap(result, data, from, to);
+    state.last = { result, data, pts };
+    render(result, { isNight, isSea, warns });
+    drawMap(result, data, pts);
     $('run-msg').textContent = `판단 완료 ${kstStr(new Date())}`;
-    const entry = { time: new Date().toISOString(), from: from.name, to: to.name, distanceKm: result.distanceKm, overall: result.overall };
+    const entry = { time: new Date().toISOString(), from: from.name, to: to.name, via: pts.slice(1, -1).map((p) => p.name).join(' / '), distanceKm: result.distanceKm, overall: result.overall };
     store.set(HIST_KEY, [entry, ...store.get(HIST_KEY, [])].slice(0, 5000));
     showHistoryCount();
     if (state.serverLog) api('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
@@ -255,10 +323,12 @@ function render(r, ctx) {
   o.className = 'overall'; o.dataset.grade = r.overall;
   o.innerHTML = `${esc(GRADE_TEXT[r.overall])}${r.overallNote ? `<span class="sub">${esc(r.overallNote)}</span>` : ''}`;
   $('route-info').innerHTML = [
-    ['거리', `${r.distanceKm}km / ${r.distanceNm}NM`], ['소요', `${r.durationMin}분`], ['도착 예정', kstStr(r.arriveUtc)],
+    ['거리', `${r.distanceKm}km / ${r.distanceNm}NM`], ['소요', `${r.durationMin}분${r.totalStayMin ? ` (체류 ${r.totalStayMin}분)` : ''}`], ['도착 예정', kstStr(r.arriveUtc)],
     ['적용 기준', `${ctx.isNight ? '야간' : '주간'}·${ctx.isSea ? '해상' : '육상'} ${r.limits.visM}m/${r.limits.ceilFt}ft`],
   ].map(([k, v]) => `<div>${esc(k)}<b>${esc(v)}</b></div>`).join('');
   $('data-warn').innerHTML = ctx.warns.map(esc).join('<br>');
+  $('legs').innerHTML = r.legs.length > 1 || r.totalStayMin ? r.legs.map((l, i) => `<tr><td>${esc(l.from)} → ${esc(l.to)}</td><td>${l.distanceKm}km</td><td>${l.durationMin}분</td>
+    <td>${esc(kstStr(l.departUtc))}${i > 0 && r.points[i].stayMin ? ` <small>(체류 ${r.points[i].stayMin}분)</small>` : ''}</td><td>${esc(kstStr(l.arriveUtc))}</td></tr>`).join('') : '';
 
   $('rows').innerHTML = r.rows.map((x) => `<tr class="${x.grade}">
     <td>${esc(x.segment)}</td><td>${esc(x.item)}</td><td>${esc(x.value)}</td><td>${esc(x.limit)}</td>
@@ -289,7 +359,7 @@ function showHistoryCount() { $('history-count').textContent = `(이 브라우�
 function downloadHistory() {
   const rows = store.get(HIST_KEY, []);
   const cell = (v) => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
-  const csv = ['시각(KST),출발,목적지,거리km,종합판정', ...rows.map((r) => [kstStr(r.time, true), r.from, r.to, r.distanceKm, GRADE_TEXT[r.overall] || r.overall].map(cell).join(','))].join('\r\n');
+  const csv = ['시각(KST),출발,경유지,목적지,거리km,종합판정', ...rows.map((r) => [kstStr(r.time, true), r.from, r.via || '', r.to, r.distanceKm, GRADE_TEXT[r.overall] || r.overall].map(cell).join(','))].join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
   a.download = `heli-wx-이력-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -306,19 +376,23 @@ async function copyReport() {
 // ---------- 지도 ----------
 function clearOverlays() { state.overlays.forEach((o) => o.setMap(null)); state.overlays = []; }
 function add(o) { o.setMap(state.map); state.overlays.push(o); return o; }
-function drawRouteOnly() { if (state.map && state.from && state.to) drawMap(null, null, state.from, state.to); }
+function drawRouteOnly() {
+  const { pts, bad } = readyPoints();
+  if (state.map && !bad.length && pts.length >= 2) drawMap(null, null, pts);
+}
 
-function drawMap(result, data, from, to) {
+function drawMap(result, data, pts) {
   const k = state.kakao; if (!k || !state.map) return;
   clearOverlays();
   const ll = (p) => new k.LatLng(p.lat, p.lon);
-  add(new k.Polyline({ path: [ll(from), ll(to)], strokeWeight: 4, strokeColor: '#0b4f8a', strokeOpacity: 0.9 }));
-  for (const [p, label] of [[from, '출발 ' + from.name], [to, '목적 ' + to.name]]) add(new k.CustomOverlay({ position: ll(p), content: `<div class="pin">${esc(label)}</div>`, yAnchor: 1 }));
-  const b = new k.LatLngBounds(); b.extend(ll(from)); b.extend(ll(to));
+  add(new k.Polyline({ path: pts.map(ll), strokeWeight: 4, strokeColor: '#0b4f8a', strokeOpacity: 0.9 }));
+  pts.forEach((p, i) => add(new k.CustomOverlay({ position: ll(p), yAnchor: 1,
+    content: `<div class="pin">${esc((i === 0 ? '출발 ' : i === pts.length - 1 ? '목적 ' : `경유${i} `) + p.name)}</div>` })));
+  const b = new k.LatLngBounds(); pts.forEach((p) => b.extend(ll(p)));
   if (result && data) {
     const lim = result.limits, f = state.config.limits.cautionFactor;
     const g = (o) => (o.visM === null || o.visM === undefined ? 'NA' : o.visM < lim.visM || (o.ceilFt !== null && o.ceilFt < lim.ceilFt) ? 'RED' : o.visM < lim.visM * f || (o.ceilFt !== null && o.ceilFt < lim.ceilFt * f) ? 'YELLOW' : 'GREEN');
-    const near = (o) => o && typeof o.lat === 'number' && distanceKm(o, from) + distanceKm(o, to) < distanceKm(from, to) + 80;
+    const near = (o) => o && typeof o.lat === 'number' && pts.some((p) => distanceKm(o, p) < Math.max(60, routeLengthKm(pts) / 2 + 40));
     for (const o of [...data.metar, ...data.asos].filter(near)) {
       add(new k.CustomOverlay({ position: ll(o), content: `<div class="stn-dot ${g(o)}" title="${esc(o.name)} 시정 ${o.visM ?? '-'}m 운고 ${o.ceilFt ?? '-'}ft"></div>` }));
     }

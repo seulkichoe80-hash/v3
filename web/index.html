@@ -32,31 +32,11 @@
   <section class="panel input" aria-labelledby="h-input">
     <h2 id="h-input">임무 입력</h2>
 
-    <fieldset class="place">
-      <legend>출발지</legend>
-      <select id="from-base" aria-label="출발 기지"><option value="">기지 선택 또는 검색</option></select>
-      <div class="search"><input id="from-q" type="search" placeholder="장소 검색 (예: 김포공항)" autocomplete="off"><ul class="results" id="from-results"></ul></div>
-      <div class="chosen" id="from-chosen">미선택</div>
-    </fieldset>
-
-    <fieldset class="place">
-      <legend>목적지(현장)</legend>
-      <div class="search"><input id="to-q" type="search" placeholder="장소 검색 또는 지도 클릭" autocomplete="off"><ul class="results" id="to-results"></ul></div>
-      <div class="chosen" id="to-chosen">미선택</div>
-      <label class="inline"><input type="radio" name="clickset" value="to" checked> 지도 클릭 → 목적지</label>
-      <label class="inline"><input type="radio" name="clickset" value="from"> 지도 클릭 → 출발지</label>
-    </fieldset>
-
-    <details id="coord-fallback-wrap">
-      <summary>좌표 직접 입력</summary>
-      <div id="coord-fallback" hidden>
-        <p class="hint" id="kakao-msg"></p>
-        <div class="grid3">
-          <input id="from-name" placeholder="출발지 이름"><input id="from-lat" placeholder="위도" inputmode="decimal"><input id="from-lon" placeholder="경도" inputmode="decimal">
-          <input id="to-name" placeholder="목적지 이름"><input id="to-lat" placeholder="위도" inputmode="decimal"><input id="to-lon" placeholder="경도" inputmode="decimal">
-        </div>
-      </div>
-    </details>
+    <label class="fmt">좌표 형식
+      <select id="coord-fmt"><option value="dd">십진수 (37.5583, 126.7906)</option><option value="ddm">도·분 (37°33.498'N …)</option><option value="dms">도·분·초 (37°33'30"N …)</option></select>
+    </label>
+    <div id="points"></div>
+    <button id="add-via" type="button" class="ghost">+ 경유지 추가</button>
 
     <div class="grid2">
       <label>출발 예정시각(KST)<input id="depart" type="datetime-local"></label>
@@ -87,6 +67,10 @@
     <div id="overall" class="overall empty">입력 후 [판단 실행]</div>
     <div id="route-info" class="route-info"></div>
     <div id="data-warn" class="data-warn"></div>
+    <div class="table-wrap legs-wrap"><table>
+      <thead><tr><th>구간</th><th>거리</th><th>소요</th><th>출발</th><th>도착</th></tr></thead>
+      <tbody id="legs"></tbody>
+    </table></div>
 
     <h3>근거</h3>
     <div class="table-wrap"><table>
