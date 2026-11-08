@@ -1,5 +1,5 @@
 // 119항공대 운영 규정 제21조 기준 판정 엔진 (순수 함수). 시스템은 조언만 하며 최종 판단은 통제관·기장.
-import { distanceKm, pointToRouteKm, KM_PER_NM } from './geo.js';
+import { distanceKm, pointToRouteKm, sunTimesLocal, KM_PER_NM } from './geo.js';
 import { assessNotamRoute } from './notam.js';
 
 export const PROVISO = '제21조① 단서 — 긴급운항 시 즉시 통제관 보고, 기종별 교범 운용한계 내에서 조종사 의견 청취 후 통제관 판단';
@@ -201,6 +201,24 @@ export function evaluate(input) {
 
   const wind = pts.map((p, i) => windInfo(segName(i), p, data.aws || [], metars, now, config));
 
+  // 일출·일몰: 각 지점을 지나는 시각(출발지=출발, 나머지=도착) 기준
+  const sun = pts.map((p, i) => {
+    const at = i === 0 ? departUtc : legs[i - 1].arriveUtc;
+    const { sunrise, sunset } = sunTimesLocal(p, at);
+    return { segment: segName(i), name: p.name, at, sunrise, sunset };
+  });
+  // 가장 급한 지점: 야간(일몰 후·일출 전)이 있으면 그것, 없으면 일몰까지 가장 적게 남은 곳(60분 이내만)
+  let sunNote = '';
+  const when = (s) => (s.segment === '출발지' ? '출발 시' : `${s.segment} 도착 시`);
+  const night = sun.find((s) => s.at >= s.sunset || s.at < s.sunrise);
+  if (night) {
+    sunNote = night.at >= night.sunset ? `${when(night)} 일몰 후 ${Math.round((night.at - night.sunset) / 60e3)}분(야간)`
+      : `${when(night)} 일출 ${Math.round((night.sunrise - night.at) / 60e3)}분 전(야간)`;
+  } else {
+    const soon = sun.map((s) => ({ s, m: (s.sunset - s.at) / 60e3 })).filter((x) => x.m <= 60).sort((x, y) => x.m - y.m)[0];
+    if (soon) sunNote = `${when(soon.s)} 일몰 ${Math.round(soon.m)}분 전`;
+  }
+
   const grades = rows.map((r) => r.grade);
   const hasNA = grades.includes('NA');
   const coreNA = rows.some((r) => r.segment !== '경로' && (r.item === '시정' || r.item === '운고') && r.grade === 'NA');
@@ -211,7 +229,7 @@ export function evaluate(input) {
   else if (overall === 'GREEN' && hasNA) overallNote = '단, 일부 자료 확인 필요';
 
   const result = { overall, overallNote, distanceKm: Math.round(distKm * 10) / 10, distanceNm: Math.round((distKm / KM_PER_NM) * 10) / 10,
-    durationMin: Math.round(durationMin), arriveUtc, limits, rows, wind, notams: assessed, hasNA, legs, totalStayMin, points: pts };
+    durationMin: Math.round(durationMin), arriveUtc, limits, rows, wind, notams: assessed, hasNA, legs, totalStayMin, points: pts, sun, sunNote };
   result.reportText = buildReport(result, input);
   return result;
 }
@@ -223,6 +241,8 @@ function buildReport(r, input) {
   const parts = [`[운항기상 조언] ${names} ${r.distanceKm}km/${r.durationMin}분(${stay}도착 ${fmtKst(r.arriveUtc)})`,
     `종합: ${GRADE_TEXT[r.overall]}${r.overallNote ? ' (' + r.overallNote + ')' : ''}`,
     `적용기준 ${isNight ? '야간' : '주간'}·${isSea ? '해상' : '육상'} 시정 ${r.limits.visM}m·운고 ${r.limits.ceilFt}ft`];
+  const ds = r.sun[r.sun.length - 1];
+  parts.push(`일출 ${fmtKst(ds.sunrise)} / 일몰 ${fmtKst(ds.sunset)}(목적지)${r.sunNote ? ' · ' + r.sunNote : ''}`);
   const dest = r.rows.filter((x) => x.segment === '목적지');
   if (dest.length) parts.push('목적지 ' + dest.map((x) => `${x.item} ${x.value}(${GRADE_TEXT[x.grade]})`).join('·'));
   for (const x of r.rows.filter((x) => x.segment !== '목적지' && x.grade !== 'GREEN')) {

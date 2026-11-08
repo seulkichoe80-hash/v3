@@ -139,3 +139,22 @@ input.bad { border-color: var(--red); background: #fff7f6; }
 .ghost:disabled { opacity: .5; cursor: not-allowed; }
 .legs-wrap { margin-top: 8px; }
 .legs-wrap:has(tbody:empty) { display: none; }
+
+.notam-head { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px; }
+.notam-head .mini { margin-left: auto; }
+.mini { padding: 3px 8px; border: 1px solid var(--line); background: #fff; border-radius: 5px; cursor: pointer; font-size: 12px; }
+.nslot { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
+.nslot.dirty { border-color: var(--yellow-dot); }
+.nslot .nh { display: flex; gap: 6px; align-items: baseline; font-size: 12px; }
+.nslot .no { font-weight: 800; color: var(--accent); }
+.nslot .nt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nslot .nt.exp { color: var(--muted); text-decoration: line-through; }
+.nslot .nt.err { color: var(--red); }
+.nslot textarea { margin-top: 4px; font-size: 11px; }
+.nslot .nb { display: flex; gap: 4px; align-items: center; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.nslot .nb .st { flex: 1; }
+.sun { display: grid; gap: 4px; margin-top: 8px; font-size: 12px; }
+.sun:empty { display: none; }
+.sun .s { display: flex; gap: 8px; padding: 4px 8px; background: #f4f6f8; border-radius: 6px; }
+.sun .s b { min-width: 64px; }
+.sun .alert { padding: 6px 10px; border-left: 4px solid var(--yellow-dot); background: var(--yellow-bg); font-weight: 700; }

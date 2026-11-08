@@ -14,7 +14,7 @@ const kstStr = (d, withDate = false) => {
   return (withDate ? `${k.getUTCMonth() + 1}/${k.getUTCDate()} ` : '') + `${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
 };
 
-const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history', FMT_KEY = 'heliwx.coordfmt', MAX_VIA = 5;
+const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history', FMT_KEY = 'heliwx.coordfmt', NOTAM_KEY = 'heliwx.notams', MAX_VIA = 5, MAX_SLOTS = 10;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 불가 환경 */ } },
@@ -42,7 +42,7 @@ function askCode() {
   });
 }
 
-const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to',
+const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to', notamShared: false, slots: {}, slotCount: 4,
   points: [{ role: 'from', name: '', lat: null, lon: null, text: '', stayMin: 0 }, { role: 'to', name: '', lat: null, lon: null, text: '', stayMin: 0 }] };
 
 // ---------- 시작 ----------
@@ -62,6 +62,9 @@ async function init() {
   const fmt = store.get(FMT_KEY, 'dd'); $('coord-fmt').value = ['dd', 'ddm', 'dms'].includes(fmt) ? fmt : 'dd';
   $('coord-fmt').addEventListener('change', () => { store.set(FMT_KEY, $('coord-fmt').value); reformatAll(); });
   $('add-via').addEventListener('click', addVia);
+  $('notam-add').addEventListener('click', () => { if (state.slotCount < MAX_SLOTS) { state.slotCount++; renderSlots(); } });
+  $('notam-reload').addEventListener('click', loadNotams);
+  loadNotams();
   for (const id of ['depart', 'cruise']) $(id).addEventListener('change', updateAuto);
   renderPoints();
   $('run').addEventListener('click', run);
@@ -216,6 +219,92 @@ function setupSearch(k) {
   });
 }
 
+// ---------- NOTAM 칸(공유 저장) ----------
+async function loadNotams() {
+  let slots = {}, shared = false, err = '';
+  try {
+    const d = await (await api('/api/notams')).json();
+    if (d.error) throw new Error(d.error);
+    shared = !!d.shared; slots = d.slots || {};
+  } catch (e) { err = e.message; }
+  if (!shared) slots = store.get(NOTAM_KEY, {});
+  state.notamShared = shared;
+  state.slots = {};
+  for (const [k, v] of Object.entries(slots)) state.slots[+k] = { text: v.text, savedText: v.text, savedAt: v.savedAt };
+  state.slotCount = Math.min(MAX_SLOTS, Math.max(4, ...Object.keys(state.slots).map(Number)));
+  $('notam-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})`
+    : shared ? '상황실 공유 저장 — 저장하면 모든 사용자에게 보입니다' : '공유 저장소 미연결 — 이 브라우저에만 저장됩니다';
+  renderSlots();
+}
+
+const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+function slotSummary(text) {
+  if (!text.trim()) return { t: '비어 있음', cls: '' };
+  const ns = splitNotams(text).map(parseNotam);
+  const ok = ns.filter((n) => n.id);
+  if (!ok.length) return { t: '⚠ 해석 불가 — 원문 확인', cls: 'err' };
+  const now = new Date();
+  const expired = ok.every((n) => !n.endPerm && n.end && n.end < now);
+  const n = ok[0];
+  const until = n.endPerm ? 'PERM' : n.end ? kstStr(n.end, true) + '까지' : '';
+  return { t: `${n.id} ${n.qcodeText || ''} · ${until}${ok.length > 1 ? ` 외 ${ok.length - 1}건` : ''}${expired ? ' · 만료(삭제 권장)' : ''}`, cls: expired ? 'exp' : '' };
+}
+
+function renderSlots() {
+  const html = [];
+  for (let i = 1; i <= state.slotCount; i++) {
+    html.push(`<div class="nslot" data-n="${i}"><div class="nh"><span class="no">${CIRCLED[i - 1]}</span><span class="nt" id="notam-${i}-title"></span></div>
+      <textarea id="notam-${i}" rows="3" spellcheck="false" placeholder="(D2840/26 NOTAMN …) 붙여넣기" aria-label="NOTAM ${i}번 칸"></textarea>
+      <div class="nb"><span class="st" id="notam-${i}-status"></span>
+        <button type="button" class="mini" id="notam-${i}-save">저장</button><button type="button" class="mini" id="notam-${i}-del">삭제</button></div></div>`);
+  }
+  $('notam-slots').innerHTML = html.join('');
+  for (let i = 1; i <= state.slotCount; i++) {
+    const ta = $(`notam-${i}`), s = state.slots[i] || { text: '', savedText: '', savedAt: null };
+    ta.value = s.text || '';
+    const refresh = () => {
+      const cur = state.slots[i] || { text: '', savedText: '', savedAt: null };
+      const sum = slotSummary(ta.value);
+      const t = $(`notam-${i}-title`); t.textContent = sum.t; t.className = 'nt ' + sum.cls;
+      const dirty = ta.value !== (cur.savedText || '');
+      $(`notam-${i}-status`).textContent = dirty ? '저장 안 됨(수정 중)' : cur.savedAt ? `저장됨 ${kstStr(cur.savedAt, true)}` : '';
+      ta.closest('.nslot').classList.toggle('dirty', dirty);
+    };
+    ta.addEventListener('input', () => { state.slots[i] = { ...(state.slots[i] || {}), text: ta.value }; refresh(); });
+    $(`notam-${i}-save`).addEventListener('click', () => saveSlot(i, ta.value).then(refresh));
+    $(`notam-${i}-del`).addEventListener('click', () => {
+      if (!ta.value.trim() && !(state.slots[i] || {}).savedText) return;
+      if (!confirm(`${CIRCLED[i - 1]}번 칸을 삭제할까요?${state.notamShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
+      deleteSlot(i).then(() => { ta.value = ''; refresh(); });
+    });
+    refresh();
+  }
+  $('notam-add').disabled = state.slotCount >= MAX_SLOTS;
+}
+
+async function saveSlot(i, text) {
+  const st = $(`notam-${i}-status`);
+  try {
+    if (state.notamShared) {
+      const r = await api(`/api/notams/${i}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || r.status);
+    } else {
+      const all = store.get(NOTAM_KEY, {}); all[i] = { text, savedAt: new Date().toISOString() }; store.set(NOTAM_KEY, all);
+    }
+    state.slots[i] = { text, savedText: text, savedAt: new Date().toISOString() };
+  } catch (e) { st.textContent = '저장 실패: ' + e.message; throw e; }
+}
+
+async function deleteSlot(i) {
+  if (state.notamShared) {
+    const r = await api(`/api/notams/${i}`, { method: 'DELETE' });
+    if (!r.ok) { $(`notam-${i}-status`).textContent = '삭제 실패'; throw new Error('delete'); }
+  } else { const all = store.get(NOTAM_KEY, {}); delete all[i]; store.set(NOTAM_KEY, all); }
+  delete state.slots[i];
+}
+
+const notamText = () => Array.from({ length: state.slotCount }, (_, k) => $(`notam-${k + 1}`)?.value || '').filter((t) => t.trim()).join('\n\n');
+
 // 판단에 쓸 지점 목록(모두 좌표가 있어야 함)
 function readyPoints() {
   const keys = pointKeys(), out = [], bad = [];
@@ -297,7 +386,7 @@ async function run() {
     $('landsea-auto').textContent = rr.available ? `자동: ${seaSuggest ? '해상 구간 포함' : '육상'}` : '자동 판별 불가(지도 없음) → 해상 기준(엄격) 적용, 육상이면 직접 선택';
     if (!rr.available) warns.push('카카오맵 없음 — 특보구역 매칭·해상 자동판별 생략(특보 직접 확인)');
 
-    const text = $('notam-text').value;
+    const text = notamText();
     const result = evaluate({
       points: pts, departUtc: dep, cruiseKt: cruiseKt(), isNight, isSea, data, dataStatus,
       regionsAvailable: rr.available, seaRoute: seaSuggest || (isSea && !rr.available),
@@ -327,6 +416,8 @@ function render(r, ctx) {
     ['적용 기준', `${ctx.isNight ? '야간' : '주간'}·${ctx.isSea ? '해상' : '육상'} ${r.limits.visM}m/${r.limits.ceilFt}ft`],
   ].map(([k, v]) => `<div>${esc(k)}<b>${esc(v)}</b></div>`).join('');
   $('data-warn').innerHTML = ctx.warns.map(esc).join('<br>');
+  $('sun').innerHTML = (r.sunNote ? `<div class="alert">☀ ${esc(r.sunNote)}</div>` : '')
+    + r.sun.map((s) => `<div class="s"><b>${esc(s.segment)}</b><span>${esc(s.name)}</span><span>일출 ${esc(kstStr(s.sunrise))} · 일몰 ${esc(kstStr(s.sunset))}</span></div>`).join('');
   $('legs').innerHTML = r.legs.length > 1 || r.totalStayMin ? r.legs.map((l, i) => `<tr><td>${esc(l.from)} → ${esc(l.to)}</td><td>${l.distanceKm}km</td><td>${l.durationMin}분</td>
     <td>${esc(kstStr(l.departUtc))}${i > 0 && r.points[i].stayMin ? ` <small>(체류 ${r.points[i].stayMin}분)</small>` : ''}</td><td>${esc(kstStr(l.arriveUtc))}</td></tr>`).join('') : '';
 
@@ -349,7 +440,7 @@ function render(r, ctx) {
       ${n.geomSource === 'Q' ? ' · Q-line 기준(근사)' : ''}</div>
       ${n.needsPermission ? `<div class="perm">⚠ 소방헬기 사전허가 필요${n.phones.length ? ': ' + esc(n.phones.join(', ')) : ''}</div>` : ''}
       <details><summary>원문</summary><pre>${esc(n.raw)}</pre></details></div>`).join('')
-    : `<p class="hint">${$('notam-text').value.trim() ? '확인 대상(D 시리즈) NOTAM 없음' : 'NOTAM 미입력 — xNotam 조회 후 붙여넣기'}</p>`)
+    : `<p class="hint">${notamText().trim() ? '확인 대상(D 시리즈) NOTAM 없음' : 'NOTAM 미입력 — xNotam 조회 후 붙여넣기'}</p>`)
     + (out ? `<p class="hint">확인 대상 아님(D 시리즈 외) ${out}건</p>` : '');
 
   $('report-text').value = r.reportText;

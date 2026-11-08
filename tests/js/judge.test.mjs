@@ -176,3 +176,23 @@ test('경유지 바람 정보 포함', () => {
   const r = evaluate(base({ points: [from, wp, to] }));
   assert.deepEqual(r.wind.map((w) => w.segment), ['출발지', '경유지1', '목적지']);
 });
+// ---- 일출·일몰 ----
+test('일출·일몰: 지점별 시각과 브리핑 표기', () => {
+  const r = evaluate(base());
+  assert.deepEqual(r.sun.map((s) => s.segment), ['출발지', '목적지']);
+  const d = r.sun[1]; const kmin = (t) => { const k = new Date(t.getTime() + 9 * 3600e3); return k.getUTCHours() * 60 + k.getUTCMinutes(); };
+  assert.ok(Math.abs(kmin(d.sunset) - (17 * 60 + 25)) <= 10); assert.ok(Math.abs(kmin(d.sunrise) - (7 * 60)) <= 10);
+  assert.match(r.reportText, /일출 \d\d:\d\d/); assert.match(r.reportText, /일몰 \d\d:\d\d/);
+});
+test('일몰 임박·일몰 후 도착 강조', () => {
+  const soon = evaluate(base({ departUtc: new Date('2026-11-08T08:05:00Z'), now: new Date('2026-11-08T08:05:00Z') }));  // KST 17:05
+  assert.match(soon.sunNote, /일몰 \d+분 전/);
+  const after = evaluate(base({ departUtc: new Date('2026-11-08T08:40:00Z'), now: new Date('2026-11-08T08:40:00Z') }));  // KST 17:40
+  assert.match(after.sunNote, /일몰 후/);
+  assert.equal(evaluate(base()).sunNote, '');  // 14:30 출발: 강조 없음
+});
+test('일몰 안내는 가장 급한 지점(목적지 도착)을 표시', () => {
+  const r = evaluate(base({ points: [from, { name: '경유A', lat: 37.62, lon: 126.88, stayMin: 10 }, to],
+    departUtc: new Date('2026-11-08T07:45:00Z'), now: new Date('2026-11-08T07:45:00Z') }));   // KST 16:45 출발, 17:01 도착
+  assert.match(r.sunNote, /^목적지 도착 시 일몰 \d+분 전/, r.sunNote);
+});

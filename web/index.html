@@ -45,9 +45,11 @@
       <label>육상/해상<select id="landsea"><option value="auto">자동</option><option value="land">육상</option><option value="sea">해상</option></select><small id="landsea-auto"></small></label>
     </div>
 
-    <label class="block">항공고시보(NOTAM) 붙여넣기 <small>xNotam 조회 결과 · D 시리즈만 확인</small>
-      <textarea id="notam-text" rows="7" spellcheck="false" placeholder="(D2840/26 NOTAMN&#10;Q)RKRR/QRPCA/...&#10;..."></textarea>
-    </label>
+    <div class="notam-head"><b>항공고시보(NOTAM)</b> <small>D 시리즈만 확인</small>
+      <button id="notam-reload" type="button" class="mini" title="저장된 칸 다시 불러오기">↻ 새로고침</button></div>
+    <p class="hint" id="notam-mode"></p>
+    <div id="notam-slots"></div>
+    <button id="notam-add" type="button" class="ghost">+ 칸 추가</button>
     <a class="ext" href="https://aim.koca.go.kr/xNotam/index.do?type=search2&amp;language=ko_KR" target="_blank" rel="noopener">xNotam 열기 ↗</a>
 
     <button id="run" class="run" type="button">판단 실행</button>
@@ -67,6 +69,7 @@
     <div id="overall" class="overall empty">입력 후 [판단 실행]</div>
     <div id="route-info" class="route-info"></div>
     <div id="data-warn" class="data-warn"></div>
+    <div id="sun" class="sun"></div>
     <div class="table-wrap legs-wrap"><table>
       <thead><tr><th>구간</th><th>거리</th><th>소요</th><th>출발</th><th>도착</th></tr></thead>
       <tbody id="legs"></tbody>

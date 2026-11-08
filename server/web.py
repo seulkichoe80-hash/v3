@@ -22,7 +22,7 @@ def _hdr(headers, name):
     return None
 
 
-def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None):
+def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None, notam_store=None):
     """→ (status, headers, body bytes). access_code가 비어 있으면 접속코드 없이 개방."""
     from urllib.parse import parse_qs
     path, _, qs = path.partition('?')
@@ -34,6 +34,8 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
         given = _hdr(headers, 'X-Access-Code') or ''
         if not hmac.compare_digest(given.encode('utf-8'), access_code.encode('utf-8')):
             return _json(401, {'error': '접속코드가 필요합니다'})
+    if path == '/api/notams' or path.startswith('/api/notams/'):
+        return _notams(method, path, body, notam_store)
     if method == 'GET' and path.startswith('/api/raw/'):
         from .kma import ENDPOINTS
         kind = path[len('/api/raw/'):]
@@ -70,7 +72,39 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
     return _json(404, {'error': 'unknown api'})
 
 
-def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127.0.0.1', access_code=''):
+def _notams(method, path, body, store):
+    if method == 'GET' and path == '/api/notams':
+        if store is None:
+            return _json(200, {'shared': False, 'slots': {}})
+        try:
+            return _json(200, {'shared': True, 'slots': {str(k): v for k, v in store.list().items()}})
+        except Exception as e:
+            return _json(502, {'error': f'공유 저장소 오류: {type(e).__name__}'})
+    if store is None:
+        return _json(503, {'error': '공유 저장소가 연결되지 않았습니다'})
+    try:
+        slot = int(path.rsplit('/', 1)[1])
+    except ValueError:
+        return _json(400, {'error': '칸 번호 오류'})
+    try:
+        if method == 'PUT':
+            d = json.loads(body[:30000] or b'{}')
+            text = d.get('text') if isinstance(d, dict) else None
+            if not isinstance(text, str):
+                return _json(400, {'error': 'text 필요'})
+            store.save(slot, text)
+        elif method == 'DELETE':
+            store.delete(slot)
+        else:
+            return _json(405, {'error': 'method'})
+        return _json(200, {'ok': True})
+    except ValueError as e:
+        return _json(400, {'error': str(e)})
+    except Exception as e:
+        return _json(502, {'error': f'공유 저장소 오류: {type(e).__name__}'})
+
+
+def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127.0.0.1', access_code='', notam_store=None):
     web_dir = os.path.realpath(web_dir)
 
     class H(BaseHTTPRequestHandler):
@@ -87,9 +121,9 @@ def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127
 
         def _api(self, method):
             n = int(self.headers.get('Content-Length', 0) or 0)
-            body = self.rfile.read(min(n, 10000)) if n else b''
+            body = self.rfile.read(min(n, 30000)) if n else b''
             self._send(*handle_api(method, self.path, dict(self.headers), body, client=client, config=config,
-                                   kakao_js_key=kakao_js_key, access_code=access_code, log_path=log_path))
+                                   kakao_js_key=kakao_js_key, access_code=access_code, log_path=log_path, notam_store=notam_store))
 
         def do_GET(self):
             path = self.path.split('?')[0]
@@ -105,5 +139,11 @@ def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127
 
         def do_POST(self):
             self._api('POST')
+
+        def do_PUT(self):
+            self._api('PUT')
+
+        def do_DELETE(self):
+            self._api('DELETE')
 
     return ThreadingHTTPServer((host, port), H)

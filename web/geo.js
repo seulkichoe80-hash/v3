@@ -85,3 +85,9 @@ export function isNightDuringRoute(pts, departUtc, arriveUtc) {
   for (let i = 0; i < pts.length; i++) if (isNightDuring(pts[i], pts[i], departUtc, arriveUtc)) return true;
   return false;
 }
+
+// 지점의 현지 날짜(경도 기준) 일출·일몰
+export function sunTimesLocal(p, t) {
+  const local = new Date(t.getTime() + (p.lon / 15) * 3600e3);
+  return sunTimesUtc(p.lat, p.lon, new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate())));
+}

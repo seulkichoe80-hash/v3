@@ -4,6 +4,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from server.kma import KmaClient, mock_fetch, urllib_fetch
 from server.web import make_server
+from server.store import FileStore
 
 
 def main():
@@ -28,7 +29,8 @@ def main():
     client = KmaClient(local.get('kmaAuthKey', ''), config, fetch=mock_fetch if a.mock else urllib_fetch)
     srv = make_server(a.port, client, config, local.get('kakaoJsKey', ''),
                       os.path.join(ROOT, 'logs', 'history.csv'), os.path.join(ROOT, 'web'),
-                      access_code=os.environ.get('ACCESS_CODE', ''))
+                      access_code=os.environ.get('ACCESS_CODE', ''),
+                      notam_store=FileStore(os.environ.get('HELIWX_NOTAM_FILE') or os.path.join(ROOT, 'logs', 'notams.json')))
     url = f'http://localhost:{a.port}/'
     print(f'헬기 운항기상 판단 도우미 실행 중: {url}  {"(시험 자료)" if a.mock else ""}  종료: Ctrl+C')
     if not a.no_browser:

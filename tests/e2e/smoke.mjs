@@ -1,12 +1,14 @@
 // 화면 점검: python run.py --mock 기동 → 카카오 미로딩(오프라인) 대체 경로로 좌표 입력 → 판단 실행
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const require = createRequire(import.meta.url);
 let pw; try { pw = require('playwright'); } catch { pw = require('/opt/node22/lib/node_modules/playwright'); }
 
 const PORT = 8010, ROOT = new URL('../../', import.meta.url).pathname;
-const srv = spawn('python3', ['run.py', '--mock', '--port', String(PORT), '--no-browser'], { cwd: ROOT, env: { ...process.env, ACCESS_CODE: 'fire119' } });
+const srv = spawn('python3', ['run.py', '--mock', '--port', String(PORT), '--no-browser'], { cwd: ROOT, env: { ...process.env, ACCESS_CODE: 'fire119', HELIWX_NOTAM_FILE: join(mkdtempSync(join(tmpdir(), 'hw-')), 'notams.json') } });
 const fail = (m) => { console.error('FAIL:', m); srv.kill(); process.exit(1); };
 for (let i = 0; i < 40; i++) { try { await fetch(`http://localhost:${PORT}/api/client-config`); break; } catch { await new Promise((r) => setTimeout(r, 200)); } }
 
@@ -37,7 +39,21 @@ await page.fill('#pt-via1-name', '경유A'); await page.fill('#pt-via1-coord', '
 await page.fill('#pt-via1-stay', '10');
 await page.selectOption('#coord-fmt', 'dd');
 await page.fill('#pt-to-name', '서울역'); await page.fill('#pt-to-coord', '37.5547, 126.9707'); await page.dispatchEvent('#pt-to-coord', 'change');
-await page.fill('#notam-text', readFileSync(ROOT + 'tests/fixtures/notam_d2840.txt', 'utf8'));
+// NOTAM 칸: 1번 저장, 2번 저장 후 삭제, 새로고침 후 유지 확인
+await page.waitForSelector('#notam-1', { timeout: 5000 }).catch(() => fail('NOTAM 1번 칸 없음'));
+if ((await page.locator('.nslot').count()) !== 4) fail('NOTAM 기본 4칸 아님');
+if (!/공유/.test(await page.textContent('#notam-mode'))) fail('공유 저장 안내 없음');
+await page.fill('#notam-1', readFileSync(ROOT + 'tests/fixtures/notam_d2840.txt', 'utf8'));
+if (!/D2840\/26/.test(await page.textContent('#notam-1-title'))) fail('1번 칸 요약 없음');
+await page.click('#notam-1-save');
+await page.waitForFunction(() => /저장/.test(document.querySelector('#notam-1-status').textContent), null, { timeout: 5000 }).catch(() => fail('1번 저장 표시 없음'));
+await page.fill('#notam-2', 'A1111/26 NOTAMN\nE)TWY A CLSD'); await page.click('#notam-2-save');
+await page.waitForFunction(() => /저장/.test(document.querySelector('#notam-2-status').textContent), null, { timeout: 5000 });
+page.once('dialog', (d) => d.accept()); await page.click('#notam-2-del');
+await page.waitForFunction(() => document.querySelector('#notam-2').value === '', null, { timeout: 5000 }).catch(() => fail('2번 삭제 안 됨'));
+await page.click('#notam-add'); if ((await page.locator('.nslot').count()) !== 5) fail('칸 추가 안 됨');
+await page.click('#notam-reload');
+await page.waitForFunction(() => /D2840/.test(document.querySelector('#notam-1').value) && document.querySelector('#notam-2').value === '', null, { timeout: 5000 }).catch(() => fail('새로고침 후 1번 유지/2번 삭제 상태 아님'));
 await page.click('#run');
 await page.waitForSelector('#overall[data-grade]', { timeout: 15000 }).catch(() => fail('종합 판정이 표시되지 않음'));
 const grade = await page.getAttribute('#overall', 'data-grade');
@@ -46,6 +62,8 @@ const report = await page.inputValue('#report-text');
 if (!['RED', 'YELLOW', 'GREEN', 'NA'].includes(grade)) fail('등급 이상: ' + grade);
 if (!notamList.includes('D2840/26')) fail('NOTAM 목록에 D2840/26 없음');
 if (!report.includes('D2840/26')) fail('보고문에 D2840/26 없음');
+if (!/일몰 \d\d:\d\d/.test(report)) fail('보고문에 일몰 없음');
+if (!/일출/.test(await page.textContent('#sun'))) fail('일출·일몰 표시 없음');
 if (!report.includes('경유A') || !report.includes('체류 10분')) fail('보고문에 경유지·체류 없음: ' + report);
 if (!(await page.textContent('#rows')).includes('경유지1')) fail('근거 표에 경유지1 없음');
 if ((await page.locator('#legs tr').count()) !== 2) fail('구간표 2행 아님');
