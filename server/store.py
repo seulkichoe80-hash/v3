@@ -111,4 +111,9 @@ class UpstashStore:
 def store_from_env(env=os.environ):
     url = env.get('KV_REST_API_URL') or env.get('UPSTASH_REDIS_REST_URL')
     tok = env.get('KV_REST_API_TOKEN') or env.get('UPSTASH_REDIS_REST_TOKEN')
+    if not (url and tok):  # Vercel 연결 시 지정한 접두어(예: STORAGE_)가 붙은 경우
+        for k in sorted(env):
+            if k.endswith('_REST_API_URL') and env.get(k[:-len('URL')] + 'TOKEN'):
+                url, tok = env[k], env[k[:-len('URL')] + 'TOKEN']
+                break
     return UpstashStore(url, tok) if url and tok else None

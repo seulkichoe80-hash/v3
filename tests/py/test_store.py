@@ -88,3 +88,9 @@ class TApi(unittest.TestCase):
         self.assertEqual(st, 401)
 
 if __name__ == '__main__': unittest.main()
+
+class TEnvPrefix(unittest.TestCase):
+    def test_any_prefix(self):
+        s = store_from_env({'STORAGE_REST_API_URL': 'https://p.upstash.io', 'STORAGE_REST_API_TOKEN': 'tk', 'STORAGE_REST_API_READ_ONLY_TOKEN': 'ro'})
+        self.assertIsInstance(s, UpstashStore); self.assertEqual(s.token, 'tk')
+        self.assertIsNone(store_from_env({'STORAGE_REST_API_URL': 'https://p'}))   # 토큰 없으면 미연결
