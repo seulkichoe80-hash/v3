@@ -46,3 +46,11 @@ test('다구간 경로', () => {
   assert.equal(isNightDuringRoute([seoul, busan], kst('2026-11-08T12:00:00'), kst('2026-11-08T12:30:00')), false);
   assert.equal(isNightDuringRoute([seoul, busan], kst('2026-11-08T12:00:00'), new Date(NaN)), true);
 });
+import { pointInPolygon, routeIntersectsPolygon } from '../../web/geo.js';
+test('다각형 포함·경로 교차', () => {
+  const sq = [{ lat: 37.3, lon: 126.6 }, { lat: 37.8, lon: 126.6 }, { lat: 37.8, lon: 127.2 }, { lat: 37.3, lon: 127.2 }];
+  assert.equal(pointInPolygon({ lat: 37.5, lon: 126.9 }, sq), true);
+  assert.equal(pointInPolygon({ lat: 36.5, lon: 126.9 }, sq), false);
+  assert.equal(routeIntersectsPolygon([{ lat: 37.0, lon: 126.9 }, { lat: 38.0, lon: 126.9 }], sq), true);   // 양 끝은 밖, 가로지름
+  assert.equal(routeIntersectsPolygon([{ lat: 36.0, lon: 126.9 }, { lat: 36.5, lon: 127.5 }], sq), false);
+});

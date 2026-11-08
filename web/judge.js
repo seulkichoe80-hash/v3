@@ -1,5 +1,5 @@
 // 119항공대 운영 규정 제21조 기준 판정 엔진 (순수 함수). 시스템은 조언만 하며 최종 판단은 통제관·기장.
-import { distanceKm, pointToRouteKm, sunTimesLocal, KM_PER_NM } from './geo.js';
+import { distanceKm, pointToRouteKm, sunTimesLocal, routeIntersectsPolygon, KM_PER_NM } from './geo.js';
 import { assessNotamRoute } from './notam.js';
 
 export const PROVISO = '제21조① 단서 — 긴급운항 시 즉시 통제관 보고, 기종별 교범 운용한계 내에서 조종사 의견 청취 후 통제관 판단';
@@ -139,6 +139,21 @@ function lightningRow(items, route, input) {
   return { ...base, value: `${near.length}회 (최근접 ${Math.min(...near).toFixed(1)}km)`, grade: 'YELLOW', note: '뇌우 가능 — 경로 변경 검토(제21조②)' };
 }
 
+export const SIGWX_TEXT = { ICE: '착빙', TURB: '난류', MTN: '산악차폐', VIS: '저시정', TS: '뇌우·적란운', CLD: '낮은 구름', FZL: '결빙고도', ETC: '기타 위험기상' };
+
+function sigwxRow(items, route, input) {
+  const base = { segment: '경로', item: '저고도 중요기상', limit: '경로 위험구역 없음', source: '기상청 저고도 SIGWX', obsTime: null };
+  const st = (input.dataStatus || {}).sigwx;
+  if (st === 'error' || st === 'stale') return { ...base, value: '-', grade: 'NA', note: '저고도 SIGWX 수신 실패 — 항공기상청 직접 확인' };
+  if (!items || !items.length) return { ...base, value: '-', grade: 'NA', note: '저고도 SIGWX 해석 불가 또는 자료 없음 — 원문 확인' };
+  const issued = items.map((x) => x.issued).filter(Boolean).sort().pop() || null;
+  const hits = items.filter((x) => x.kind !== 'FZL' && routeIntersectsPolygon(route, x.points));
+  if (!hits.length) return { ...base, value: `경로 해당 없음 (${items.length}개 요소)`, grade: 'GREEN', obsTime: issued, note: '' };
+  const kinds = [...new Set(hits.map((x) => SIGWX_TEXT[x.kind] || x.kind))];
+  return { ...base, value: `경로 통과: ${kinds.join('·')}`, grade: 'YELLOW', obsTime: issued,
+    note: hits.some((x) => x.kind === 'ICE') ? '착빙 예상 구역 — 회피 검토(제21조④)' : hits.some((x) => x.kind === 'TURB') ? '난류 예상 구역 — 조종사 판단(제21조⑥)' : '저고도 위험기상 구역 — 경로 검토' };
+}
+
 function windInfo(segment, p, aws, metars, now, config) {
   const fresh = aws.filter((x) => ageMin(x.obsTime, now) <= config.freshnessMin.aws);
   const a = nearest(fresh, p, 30);
@@ -187,6 +202,7 @@ export function evaluate(input) {
     ...tafRows(alongRoute(data.taf || [], pts, metarKm), limits, departUtc, arriveUtc),
     ...warnRows(data.warn || [], routeRegions, dataStatus.warn, regionsAvailable, seaRoute),
     lightningRow(data.lightning || [], pts, input),
+    sigwxRow(data.sigwx, pts, input),
   ];
 
   const assessed = notams.map((n) => assessNotamRoute(n, pts, departUtc, arriveUtc, config.radius.notamNearNm));

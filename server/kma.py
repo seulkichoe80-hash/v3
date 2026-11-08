@@ -19,7 +19,7 @@ ENDPOINTS = {
     'taf': H2 + 'AmmIwxxmService/getTaf?pageNo=1&numOfRows=10&dataType=JSON&icao={icao}',
     'sigwx': H1 + 'amo_sigwx.php?tm={tm_sigwx}&help=1',   # 저고도 중요기상예보(형식 확인용, 점검 주소 전용)
 }
-TTL_MIN = {'asos': 5, 'aws': 2, 'warn': 5, 'lightning': 2, 'metar': 5, 'taf': 10, 'stn_sfc': 1440, 'stn_aws': 1440}
+TTL_MIN = {'sigwx': 30, 'asos': 5, 'aws': 2, 'warn': 5, 'lightning': 2, 'metar': 5, 'taf': 10, 'stn_sfc': 1440, 'stn_aws': 1440}
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tests', 'fixtures', 'kma')
 
 
@@ -41,7 +41,7 @@ _MOCK_STATE = {}
 def mock_fetch(url, timeout=5):
     """--mock 및 테스트용: URL에 따라 픽스처 반환."""
     table = [('inf=SFC', 'stn_sfc.txt'), ('inf=AWS', 'stn_aws.txt'), ('kma_sfctm2', 'asos.txt'),
-             ('wrn_now', 'warn.txt'), ('lgt_pnt', 'lgt.txt'), ('getMetar', 'metar.json'), ('getTaf', 'taf.json')]
+             ('wrn_now', 'warn.txt'), ('lgt_pnt', 'lgt.txt'), ('amo_sigwx', 'sigwx_rows.txt'), ('getMetar', 'metar.json'), ('getTaf', 'taf.json')]
     if 'nph-aws2_min' in url:  # 클라이언트는 현재 → 10분 전 순으로 호출한다
         tm2 = url.split('tm2=')[1][:12]
         name = 'aws_10ago.txt' if _MOCK_STATE.get('aws_tm2', '') > tm2 else 'aws.txt'
@@ -116,6 +116,8 @@ class KmaClient:
             return P.parse_warn(self._get('warn'))
         if kind == 'lightning':
             return P.parse_lightning(self._get('lightning'))
+        if kind == 'sigwx':
+            return P.parse_sigwx(self._get('sigwx'))
         if kind in ('metar', 'taf'):
             def one(a):
                 try:

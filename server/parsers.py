@@ -443,3 +443,49 @@ def parse_taf_iwxxm(xml, airports):
                 'groups': groups, 'raw': 'IWXXM'}
     except (_ET.ParseError, ValueError, TypeError, AttributeError):
         return None
+
+
+# ---------------- 저고도 중요기상예보(SIGWX) ----------------
+# 공공데이터포털 설명: "요소 종류, 요소 이름, 위경도값". 실제 컬럼 순서를 확인하기 전이라
+# 행에서 한반도 범위 위·경도 쌍과 글자(종류·이름)를 찾아 같은 요소끼리 묶는 방식으로 해석한다.
+SIGWX_KIND = [('ICE', ('ICE', 'ICING', '착빙')), ('TURB', ('TURB', '난류', '난기류')),
+              ('MTN', ('MT OBSC', 'MTW', 'MOUNTAIN', '산악')), ('VIS', ('VIS', '시정', 'FG', 'BR', '안개', 'HZ')),
+              ('TS', ('CB', 'TS', '뇌우', '적란운')), ('CLD', ('CLD', 'BKN', 'OVC', '구름')),
+              ('FZL', ('FZLVL', 'FRZ', '결빙고도', '0°C', '0도'))]
+
+
+def _sigwx_kind(label):
+    up = label.upper()
+    for k, keys in SIGWX_KIND:
+        if any(key.upper() in up for key in keys):
+            return k
+    return 'ETC'
+
+
+def parse_sigwx(text):
+    groups, order = {}, []
+    for s in _data_lines(text):
+        toks = [t for t in re.split(r'[,\t ]+', s) if t]
+        if len(toks) < 3:
+            continue
+        nums = [(i, num(t)) for i, t in enumerate(toks) if re.fullmatch(r'-?\d+\.\d+', t)]
+        pts, used = [], set()
+        for (i1, a), (i2, b) in zip(nums, nums[1:]):
+            if i1 in used or a is None or b is None:
+                continue
+            if 30 <= a <= 45 and 115 <= b <= 135:
+                pts.append({'lat': a, 'lon': b}); used |= {i1, i2}
+            elif 115 <= a <= 135 and 30 <= b <= 45:   # 경도·위도 순서
+                pts.append({'lat': b, 'lon': a}); used |= {i1, i2}
+        if not pts:
+            continue
+        times = [t for t in toks if re.fullmatch(r'\d{12}', t)]
+        words = [t for t in toks if not re.fullmatch(r'-?\d+(\.\d+)?', t)]
+        ints = [t for t in toks if re.fullmatch(r'\d{1,3}', t)]
+        label = ' '.join(words) or '기타'
+        key = (times[0] if times else '', ints[0] if (ints and len(pts) == 1) else '', label)
+        if key not in groups:
+            groups[key] = {'kind': _sigwx_kind(label), 'label': label, 'issued': kst_to_iso(times[0]) if times else None, 'points': []}
+            order.append(key)
+        groups[key]['points'] += pts
+    return [groups[k] for k in order]

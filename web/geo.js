@@ -91,3 +91,18 @@ export function sunTimesLocal(p, t) {
   const local = new Date(t.getTime() + (p.lon / 15) * 3600e3);
   return sunTimesUtc(p.lat, p.lon, new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate())));
 }
+
+// ---- 다각형(저고도 SIGWX 구역) ----
+export function pointInPolygon(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.lat > p.lat) !== (b.lat > p.lat) && p.lon < ((b.lon - a.lon) * (p.lat - a.lat)) / (b.lat - a.lat) + a.lon) inside = !inside;
+  }
+  return inside;
+}
+// 경로를 1km 간격으로 촘촘히 나눠 하나라도 구역 안에 들면 통과로 본다
+export function routeIntersectsPolygon(route, poly) {
+  if (!poly || poly.length < 3) return false;
+  return sampleRouteMulti(route, 1).some((p) => pointInPolygon(p, poly));
+}

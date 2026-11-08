@@ -197,3 +197,16 @@ test('일몰 안내는 가장 급한 지점(목적지 도착)을 표시', () => 
   assert.match(r.sunNote, /^목적지 도착 시 일몰 \d+분 전/, r.sunNote);
 });
 test('보고문 머리말은 하늘길119', () => { assert.match(evaluate(base()).reportText, /^\[하늘길119 운항판단\] /); });
+// ---- 저고도 SIGWX ----
+const ice = { kind: 'ICE', label: 'MOD_ICE', issued: '2026-11-08T05:00:00Z', points: [{ lat: 37.50, lon: 126.85 }, { lat: 37.62, lon: 126.85 }, { lat: 37.62, lon: 126.95 }, { lat: 37.50, lon: 126.95 }] };
+test('SIGWX: 경로가 착빙 구역 통과 → 주의', () => {
+  const r = evaluate(base({ data: { ...base().data, sigwx: [ice] } }));
+  const row = r.rows.find((x) => x.item === '저고도 중요기상');
+  assert.equal(row.grade, 'YELLOW'); assert.match(row.value, /착빙/); assert.match(r.reportText, /착빙/);
+});
+test('SIGWX: 해당 없음 → 가능 / 자료 수신 실패·해석 0건 → 자료없음', () => {
+  const far = { ...ice, points: ice.points.map((p) => ({ lat: p.lat - 2, lon: p.lon })) };
+  assert.equal(evaluate(base({ data: { ...base().data, sigwx: [far] } })).rows.find((x) => x.item === '저고도 중요기상').grade, 'GREEN');
+  assert.equal(evaluate(base({ data: { ...base().data, sigwx: [] } })).rows.find((x) => x.item === '저고도 중요기상').grade, 'NA');
+  assert.equal(evaluate(base({ dataStatus: { sigwx: 'error' }, data: { ...base().data, sigwx: [] } })).rows.find((x) => x.item === '저고도 중요기상').grade, 'NA');
+});

@@ -2,11 +2,11 @@
 import { distanceKm, sampleRouteMulti, isNightDuringRoute, routeLengthKm, KM_PER_NM } from './geo.js';
 import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
-import { evaluate, GRADE_TEXT, dirText } from './judge.js';
+import { evaluate, GRADE_TEXT, dirText, SIGWX_TEXT } from './judge.js';
 
 const $ = (id) => document.getElementById(id);
-const KINDS = ['metar', 'taf', 'asos', 'aws', 'warn', 'lightning'];
-const KIND_TEXT = { metar: 'METAR', taf: 'TAF', asos: 'ASOS 지상관측', aws: 'AWS', warn: '기상특보', lightning: '낙뢰' };
+const KINDS = ['metar', 'taf', 'asos', 'aws', 'warn', 'lightning', 'sigwx'];
+const KIND_TEXT = { metar: 'METAR', taf: 'TAF', asos: 'ASOS 지상관측', aws: 'AWS', warn: '기상특보', lightning: '낙뢰', sigwx: '저고도 중요기상' };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kstStr = (d, withDate = false) => {
   if (!d) return '-';
@@ -56,6 +56,15 @@ async function init() {
     if (!ok) await askCode();
   }
   $('history-csv').addEventListener('click', downloadHistory);
+  $('sigwx-raw-wrap').addEventListener('toggle', async (e) => {
+    if (!e.target.open || $('sigwx-raw').dataset.loaded) return;
+    $('sigwx-raw').textContent = '불러오는 중…';
+    try {
+      const d = await (await api('/api/raw/sigwx?limit=20000')).json();
+      $('sigwx-raw').textContent = (d.ok ? '' : '[수신 실패] ') + (d.body || d.error || '');
+      $('sigwx-raw').dataset.loaded = '1';
+    } catch (err) { $('sigwx-raw').textContent = '원문을 불러오지 못했습니다: ' + err.message; }
+  });
   showHistoryCount();
   $('cruise').value = cc.config.cruiseKt;
   $('depart').value = kstInputNow();
@@ -561,6 +570,7 @@ function render(r, ctx) {
     + (out ? `<p class="hint">확인 대상 아님(D 시리즈 외) ${out}건</p>` : '');
 
   $('report-text').value = r.reportText;
+  $('sigwx-raw-wrap').hidden = false;
 }
 
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
@@ -607,6 +617,11 @@ function drawMap(result, data, pts) {
     for (const n of result.notams.filter((n) => n.inScope && n.center)) {
       add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 2, strokeColor: '#7a3fb0', strokeOpacity: 0.9, fillColor: '#7a3fb0', fillOpacity: 0.12 }));
       b.extend(ll(n.center));
+    }
+    const SIG_COLOR = { ICE: '#1f77d0', TURB: '#c4231a', MTN: '#7a5a2a', VIS: '#6b7280', TS: '#b100c4', CLD: '#4b6b8a', ETC: '#555' };
+    for (const z of (data.sigwx || []).filter((z) => z.kind !== 'FZL' && z.points.length >= 3)) {
+      const c = SIG_COLOR[z.kind] || '#555';
+      add(new k.Polygon({ path: z.points.map(ll), strokeWeight: 2, strokeColor: c, strokeOpacity: 0.8, strokeStyle: 'dash', fillColor: c, fillOpacity: 0.08 }));
     }
     for (const l of data.lightning.filter(near)) add(new k.CustomOverlay({ position: ll(l), content: '<div class="bolt" title="낙뢰">✕</div>' }));
   }

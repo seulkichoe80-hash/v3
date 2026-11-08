@@ -4,10 +4,10 @@ from datetime import datetime
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import parsers as P
 
-KINDS = ('metar', 'taf', 'asos', 'aws', 'warn', 'lightning')
+KINDS = ('metar', 'taf', 'asos', 'aws', 'warn', 'lightning', 'sigwx')
 TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
          '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml'}
-SHARED_CACHE_SEC = {'metar': 180, 'taf': 300, 'asos': 180, 'aws': 60, 'warn': 120, 'lightning': 60}
+SHARED_CACHE_SEC = {'sigwx': 600, 'metar': 180, 'taf': 300, 'asos': 180, 'aws': 60, 'warn': 120, 'lightning': 60}
 JSON_T = 'application/json; charset=utf-8'
 
 

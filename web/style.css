@@ -187,3 +187,6 @@ body.coords-on .place .loc { display: none; }
 .place .loc { color: var(--ink); }
 .map-off[hidden] { display: none; }
 .results li.empty { cursor: default; color: var(--muted); }
+.raw { margin-top: 10px; font-size: 12px; }
+.raw summary { cursor: pointer; color: var(--accent); }
+.raw pre { white-space: pre-wrap; font: 11px/1.4 var(--mono); max-height: 240px; overflow: auto; background: #f4f6f8; padding: 8px; border-radius: 6px; }

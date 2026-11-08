@@ -122,3 +122,16 @@ class Real(unittest.TestCase):
         self.assertEqual(w[0]['regName'], '동해남부북쪽안쪽먼바다'); self.assertEqual(w[0]['kind'], '풍랑')
         self.assertEqual(w[0]['level'], '예비'); self.assertEqual(w[0]['regUpName'], '동해남부전해상')
         self.assertEqual(w[0]['tmEf'], '2026-11-09T08:58:00Z')
+
+class Sigwx(unittest.TestCase):
+    def test_rows_format(self):
+        a = P.parse_sigwx(fx('sigwx_rows.txt'))
+        self.assertEqual([x['kind'] for x in a], ['ICE', 'TURB'])
+        self.assertEqual(len(a[0]['points']), 4); self.assertAlmostEqual(a[0]['points'][1]['lon'], 127.2)
+        self.assertEqual(a[0]['issued'], '2026-11-08T05:00:00Z')
+    def test_line_format(self):
+        a = P.parse_sigwx(fx('sigwx_line.txt'))
+        self.assertEqual(a[0]['kind'], 'MTN'); self.assertEqual(len(a[0]['points']), 4)
+        self.assertEqual(a[1]['kind'], 'FZL'); self.assertEqual(len(a[1]['points']), 2)
+    def test_garbage(self):
+        self.assertEqual(P.parse_sigwx(fx('error.html')), []); self.assertEqual(P.parse_sigwx('#START7777\n#7777END'), [])
