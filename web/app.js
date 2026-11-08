@@ -14,7 +14,7 @@ const kstStr = (d, withDate = false) => {
   return (withDate ? `${k.getUTCMonth() + 1}/${k.getUTCDate()} ` : '') + `${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
 };
 
-const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history', FMT_KEY = 'heliwx.coordfmt', NOTAM_KEY = 'heliwx.notams', COORD_ON_KEY = 'heliwx.coordOn', MAX_VIA = 5, MAX_SLOTS = 10;
+const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history', FMT_KEY = 'heliwx.coordfmt', NOTAM_KEY = 'heliwx.notams', COORD_ON_KEY = 'heliwx.coordOn', PLACES_KEY = 'heliwx.places', MAX_VIA = 5, MAX_SLOTS = 10;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 불가 환경 */ } },
@@ -42,7 +42,7 @@ function askCode() {
   });
 }
 
-const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to', notamShared: false, slots: {}, slotCount: 2, openSlots: new Set(),
+const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to', notamShared: false, slots: {}, slotCount: 2, openSlots: new Set(), places: [], placesShared: false,
   points: [{ role: 'from', name: '', lat: null, lon: null, text: '', stayMin: 0 }, { role: 'to', name: '', lat: null, lon: null, text: '', stayMin: 0 }] };
 
 // ---------- 시작 ----------
@@ -60,13 +60,16 @@ async function init() {
   $('cruise').value = cc.config.cruiseKt;
   $('depart').value = kstInputNow();
   const fmt = store.get(FMT_KEY, 'dd'); $('coord-fmt').value = ['dd', 'ddm', 'dms'].includes(fmt) ? fmt : 'dd';
-  $('coord-fmt').addEventListener('change', () => { store.set(FMT_KEY, $('coord-fmt').value); reformatAll(); });
+  $('coord-fmt').addEventListener('change', () => { store.set(FMT_KEY, $('coord-fmt').value); reformatAll(); renderPlaces(); $('place-coord').placeholder = '좌표 (' + COORD_PLACEHOLDER[fmtNow()].split('  ')[0] + ')'; });
   setCoordsOn(store.get(COORD_ON_KEY, false), false);
   $('coord-toggle').addEventListener('change', (e) => setCoordsOn(e.target.checked, true));
   $('add-via').addEventListener('click', addVia);
   $('notam-add').addEventListener('click', () => { if (state.slotCount < MAX_SLOTS) { state.slotCount++; state.openSlots.add(state.slotCount); renderSlots(); } });
   $('notam-reload').addEventListener('click', loadNotams);
   loadNotams();
+  loadPlaces();
+  $('place-q').addEventListener('input', renderPlaces);
+  $('place-add').addEventListener('click', addPlaceFromForm);
   for (const id of ['depart', 'cruise']) $(id).addEventListener('change', updateAuto);
   renderPoints();
   $('run').addEventListener('click', run);
@@ -145,11 +148,11 @@ function renderPoints() {
         <button type="button" data-act="up" data-i="${i}" aria-label="위로">▲</button><button type="button" data-act="down" data-i="${i}" aria-label="아래로">▼</button><button type="button" data-act="del" data-i="${i}">삭제</button></div>` : '';
     return `<fieldset class="place ${p.role}" data-i="${i}"><legend>${roleLabel(k)}</legend>${base}
       <div class="search"><input id="pt-${k}-q" type="search" placeholder="장소 검색" autocomplete="off"><ul class="results" id="pt-${k}-results"></ul></div>
-      <div class="row"><input id="pt-${k}-name" placeholder="이름" value="${esc(p.name)}"></div>
+      <div class="row"><input id="pt-${k}-name" placeholder="이름" value="${esc(p.name)}"><button type="button" class="star" id="pt-${k}-star" title="이 위치를 주요지점으로 저장">★ 저장</button></div>
       <div class="loc" id="pt-${k}-loc">${Number.isFinite(p.lat) ? `위치 ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}` : '위치 미지정 — 장소 검색 또는 지도 클릭'}</div>
       <div class="row coord-only"><input id="pt-${k}-coord" placeholder="${esc(COORD_PLACEHOLDER[fmtNow()])}" value="${esc(p.text)}" spellcheck="false" aria-label="${roleLabel(k)} 좌표"></div>
       <div class="coord-msg coord-only" id="pt-${k}-msg"></div>${tools}
-      <label class="inline"><input type="radio" name="clickset" value="${k}" ${state.clickTarget === k ? 'checked' : ''}> 지도 클릭 → 이 지점</label></fieldset>`;
+      <label class="inline"><input type="radio" name="clickset" value="${k}" ${state.clickTarget === k ? 'checked' : ''}> 지도 클릭·주요지점 → 이 지점</label></fieldset>`;
   }).join('');
   state.points.forEach((p, i) => wirePoint(p, keys[i]));
   $('add-via').disabled = state.points.filter((p) => p.role === 'via').length >= MAX_VIA;
@@ -180,6 +183,11 @@ function wirePoint(p, k) {
   const base = $(`pt-${k}-base`);
   if (base) base.addEventListener('change', (e) => { const b = state.config.bases[+e.target.value]; if (b) setPointByKey(k, { name: b.name, lat: b.lat, lon: b.lon }); });
   document.querySelectorAll(`fieldset[data-i] input[name=clickset][value="${k}"]`).forEach((r) => r.addEventListener('change', () => { state.clickTarget = k; }));
+  $(`pt-${k}-star`).addEventListener('click', async () => {
+    if (!Number.isFinite(p.lat)) { alert('먼저 위치를 지정하세요'); return; }
+    const name = prompt('주요지점 이름', p.name || ''); if (!name || !name.trim()) return;
+    try { await savePlace({ name: name.trim(), lat: p.lat, lon: p.lon, memo: '' }); } catch (e) { alert('저장 실패: ' + e.message); }
+  });
   setupSearch(k);
 }
 
@@ -209,25 +217,99 @@ function setPointByKey(k, place) {
   renderPoints();
 }
 
+function matchPlaces(q) {
+  const t = q.trim().toLowerCase(); if (!t) return [];
+  return state.places.filter((p) => (p.name + ' ' + (p.memo || '')).toLowerCase().includes(t)).slice(0, 8);
+}
+
 function setupSearch(k) {
   const q = $(`pt-${k}-q`), list = $(`pt-${k}-results`);
   let t = null;
   q.addEventListener('input', () => {
     clearTimeout(t);
     t = setTimeout(() => {
-      list.innerHTML = '';
-      if (!state.places || q.value.trim().length < 2) return;
-      state.places.keywordSearch(q.value.trim(), (data, st) => {
-        if (st !== state.kakao.services.Status.OK) return;
-        list.innerHTML = data.slice(0, 8).map((d, i) => `<li tabindex="0" data-i="${i}">${esc(d.place_name)}<small>${esc(d.road_address_name || d.address_name)}</small></li>`).join('');
+      const query = q.value.trim();
+      const favs = matchPlaces(query);
+      const draw = (kakao) => {
+        list.innerHTML = favs.map((p, i) => `<li tabindex="0" class="fav" data-f="${i}">★ ${esc(p.name)}<small>${esc(p.memo || '')} ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</small></li>`).join('')
+          + kakao.map((d, i) => `<li tabindex="0" data-i="${i}">${esc(d.place_name)}<small>${esc(d.road_address_name || d.address_name)}</small></li>`).join('');
         list.querySelectorAll('li').forEach((li) => {
-          const pick = () => { const d = data[+li.dataset.i]; setPointByKey(k, { name: d.place_name, lat: +d.y, lon: +d.x }); };
+          const pick = () => {
+            if (li.dataset.f !== undefined) { const p = favs[+li.dataset.f]; setPointByKey(k, { name: p.name, lat: p.lat, lon: p.lon }); }
+            else { const d = kakao[+li.dataset.i]; setPointByKey(k, { name: d.place_name, lat: +d.y, lon: +d.x }); }
+          };
           li.addEventListener('click', pick);
           li.addEventListener('keydown', (e) => e.key === 'Enter' && pick());
         });
-      });
+      };
+      if (query.length < 1) { list.innerHTML = ''; return; }
+      draw([]);
+      if (!state.places || !state.kakao || query.length < 2) return;
+      state.places.keywordSearch(query, (data, st) => { if (st === state.kakao.services.Status.OK) draw(data.slice(0, 8)); });
     }, 250);
   });
+}
+
+// ---------- 주요지점(공유 저장) ----------
+async function loadPlaces() {
+  let list = [], shared = false, err = '';
+  try {
+    const d = await (await api('/api/places')).json();
+    if (d.error) throw new Error(d.error);
+    shared = !!d.shared; list = d.places || [];
+  } catch (e) { err = e.message; }
+  if (!shared) list = store.get(PLACES_KEY, []);
+  state.placesShared = shared; state.places = list;
+  $('places-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})` : shared ? '상황실 공유 저장' : '공유 저장소 미연결 — 이 브라우저에만 저장';
+  renderPlaces();
+}
+
+function renderPlaces() {
+  const q = $('place-q').value.trim().toLowerCase();
+  const items = state.places.filter((p) => !q || (p.name + ' ' + (p.memo || '')).toLowerCase().includes(q));
+  $('places-count').textContent = `(${state.places.length})`;
+  $('place-list').innerHTML = items.length ? items.map((p) => `<li data-id="${esc(p.id)}"><button type="button" class="pick" title="선택된 지점(이 지점)에 넣기">★ ${esc(p.name)}
+      <small>${esc(formatCoord(p, fmtNow()))}${p.memo ? ' · ' + esc(p.memo) : ''}</small></button><button type="button" class="mini del">삭제</button></li>`).join('')
+    : `<li><small>${state.places.length ? '검색 결과 없음' : '등록된 주요지점이 없습니다'}</small></li>`;
+  $('place-list').querySelectorAll('li[data-id]').forEach((li) => {
+    const p = state.places.find((x) => x.id === li.dataset.id);
+    li.querySelector('.pick').addEventListener('click', () => setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }));
+    li.querySelector('.del').addEventListener('click', async () => {
+      if (!confirm(`주요지점 "${p.name}"을(를) 삭제할까요?${state.placesShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
+      try { await deletePlace(p.id); } catch (e) { alert('삭제 실패: ' + e.message); }
+    });
+  });
+}
+
+async function savePlace(p) {
+  if (state.placesShared) {
+    const r = await api('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || r.status);
+    state.places = [...state.places.filter((x) => x.id !== d.place.id), d.place].sort((a, b) => (a.name < b.name ? -1 : 1));
+  } else {
+    if (!p.name || p.name.length > 50) throw new Error('이름은 1~50자');
+    const rec = { ...p, id: Math.random().toString(16).slice(2, 14), savedAt: new Date().toISOString() };
+    state.places = [...state.places, rec].sort((a, b) => (a.name < b.name ? -1 : 1)); store.set(PLACES_KEY, state.places);
+  }
+  renderPlaces();
+}
+
+async function deletePlace(id) {
+  if (state.placesShared) { const r = await api(`/api/places/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (!r.ok) throw new Error(r.status); }
+  state.places = state.places.filter((x) => x.id !== id);
+  if (!state.placesShared) store.set(PLACES_KEY, state.places);
+  renderPlaces();
+}
+
+async function addPlaceFromForm() {
+  const msg = $('place-msg'), name = $('place-name').value.trim();
+  const c = parseCoord($('place-coord').value, fmtNow());
+  if (!name) { msg.textContent = '이름을 입력하세요'; return; }
+  if (c.error) { msg.textContent = '좌표: ' + c.error; return; }
+  try {
+    await savePlace({ name, lat: c.lat, lon: c.lon, memo: $('place-memo').value.trim() });
+    $('place-name').value = $('place-coord').value = $('place-memo').value = ''; msg.textContent = '추가했습니다';
+  } catch (e) { msg.textContent = '추가 실패: ' + e.message; }
 }
 
 // ---------- NOTAM 칸(공유 저장) ----------

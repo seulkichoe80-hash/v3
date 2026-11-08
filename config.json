@@ -7,7 +7,7 @@
   },
   "radius": { "metarNm": 30, "asosKm": 25, "lightningKm": 20, "notamNearNm": 5 },
   "freshnessMin": { "metar": 90, "asos": 90, "aws": 20, "lightning": 30 },
-  "cruiseKt": 110,
+  "cruiseKt": 120,
   "bases": [],
   "airports": [
     { "icao": "RKSI", "name": "인천", "lat": 37.4602, "lon": 126.4407 },

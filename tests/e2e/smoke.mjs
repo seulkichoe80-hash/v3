@@ -30,6 +30,22 @@ if (!(await page.isChecked('#coord-toggle'))) fail('지도 없음인데 좌표 �
 await page.uncheck('#coord-toggle');
 if (await page.isVisible('#pt-from-coord') || await page.isVisible('#coord-fmt')) fail('좌표 입력을 끄면 숨겨져야 함');
 await page.check('#coord-toggle');
+if ((await page.inputValue('#cruise')) !== '120') fail('순항속도 기본값 120 아님');
+// 주요지점: 추가 → 목록 선택으로 목적지 지정 → 카드 검색에 ★ 표시 → 카드 ★저장 → 삭제
+await page.click('#places-sum');
+await page.fill('#place-name', '테스트헬리패드'); await page.fill('#place-coord', '37.60, 126.95'); await page.fill('#place-memo', '옥상');
+await page.click('#place-add');
+await page.waitForFunction(() => /테스트헬리패드/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('주요지점 추가 안 됨'));
+await page.click('#place-list li:has-text("테스트헬리패드") .pick');
+if ((await page.inputValue('#pt-to-name')) !== '테스트헬리패드') fail('주요지점 선택이 목적지에 반영 안 됨');
+await page.fill('#pt-from-q', '헬리'); await page.dispatchEvent('#pt-from-q', 'input');
+await page.waitForFunction(() => /★\s*테스트헬리패드/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 }).catch(() => fail('카드 검색에 주요지점 안 나옴'));
+await page.click('#pt-from-results li:has-text("테스트헬리패드")');
+if ((await page.inputValue('#pt-from-name')) !== '테스트헬리패드') fail('카드 검색 결과 선택 안 됨');
+page.once('dialog', (d) => d.accept('카드저장지점')); await page.click('#pt-from-star');
+await page.waitForFunction(() => /카드저장지점/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('카드 ★저장 안 됨'));
+page.once('dialog', (d) => d.accept()); await page.click('#place-list li:has-text("카드저장지점") .del');
+await page.waitForFunction(() => !/카드저장지점/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('주요지점 삭제 안 됨'));
 // 도·분·초 형식으로 출발지, 십진수로 목적지, 경유지 1개(도·분) 추가
 await page.selectOption('#coord-fmt', 'dms');
 await page.fill('#pt-from-name', '김포'); await page.fill('#pt-from-coord', `37°33'30"N 126°47'26"E`); await page.dispatchEvent('#pt-from-coord', 'change');

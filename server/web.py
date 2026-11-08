@@ -36,6 +36,8 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
             return _json(401, {'error': '접속코드가 필요합니다'})
     if path == '/api/notams' or path.startswith('/api/notams/'):
         return _notams(method, path, body, notam_store)
+    if path == '/api/places' or path.startswith('/api/places/'):
+        return _places(method, path, body, notam_store)
     if method == 'GET' and path.startswith('/api/raw/'):
         from .kma import ENDPOINTS
         kind = path[len('/api/raw/'):]
@@ -98,6 +100,33 @@ def _notams(method, path, body, store):
         else:
             return _json(405, {'error': 'method'})
         return _json(200, {'ok': True})
+    except ValueError as e:
+        return _json(400, {'error': str(e)})
+    except Exception as e:
+        return _json(502, {'error': f'공유 저장소 오류: {type(e).__name__}'})
+
+
+def _places(method, path, body, store):
+    if method == 'GET' and path == '/api/places':
+        if store is None:
+            return _json(200, {'shared': False, 'places': []})
+        try:
+            return _json(200, {'shared': True, 'places': store.places_list()})
+        except Exception as e:
+            return _json(502, {'error': f'공유 저장소 오류: {type(e).__name__}'})
+    if store is None:
+        return _json(503, {'error': '공유 저장소가 연결되지 않았습니다'})
+    try:
+        if method == 'POST' and path == '/api/places':
+            try:
+                d = json.loads(body[:5000] or b'{}')
+            except ValueError:
+                return _json(400, {'error': 'JSON 형식 오류'})
+            return _json(200, {'ok': True, 'place': store.places_save(d)})
+        if method == 'DELETE' and path.startswith('/api/places/'):
+            store.places_delete(path.rsplit('/', 1)[1])
+            return _json(200, {'ok': True})
+        return _json(405, {'error': 'method'})
     except ValueError as e:
         return _json(400, {'error': str(e)})
     except Exception as e:

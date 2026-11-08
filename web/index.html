@@ -38,6 +38,19 @@
     </label>
     <div id="points"></div>
     <button id="add-via" type="button" class="ghost">+ 경유지 추가</button>
+    <details id="places-box" class="places">
+      <summary id="places-sum">★ 주요지점 <small id="places-count"></small></summary>
+      <input id="place-q" type="search" placeholder="주요지점 검색 (이름·메모)" autocomplete="off">
+      <ul id="place-list" class="place-list"></ul>
+      <div class="place-add">
+        <b>새 주요지점</b>
+        <input id="place-name" placeholder="이름 (예: ○○병원 헬리패드)" maxlength="50">
+        <input id="place-coord" placeholder="좌표 (위에서 고른 좌표 형식)" spellcheck="false">
+        <input id="place-memo" placeholder="메모 (선택, 100자)" maxlength="100">
+        <button id="place-add" type="button" class="mini">추가</button> <small id="place-msg" class="hint"></small>
+      </div>
+      <p class="hint" id="places-mode"></p>
+    </details>
 
     <div class="grid2">
       <label>출발 예정시각(KST)<input id="depart" type="datetime-local"></label>

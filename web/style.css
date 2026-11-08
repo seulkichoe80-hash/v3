@@ -170,3 +170,15 @@ body.coords-on .place .loc { display: none; }
 .nslot[open] > summary::before { transform: rotate(90deg); }
 .nslot .nh .st { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .nslot.dirty .nh .st { color: var(--yellow); font-weight: 700; }
+
+.places { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 0 0 10px; font-size: 13px; }
+.places > summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+.places input { margin-top: 6px; }
+.place-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow: auto; }
+.place-list li { display: flex; gap: 6px; align-items: center; padding: 4px 2px; border-bottom: 1px solid #f0f2f4; font-size: 12px; }
+.place-list .pick { flex: 1; text-align: left; border: 0; background: none; cursor: pointer; padding: 2px; font: inherit; color: inherit; }
+.place-list .pick:hover { background: #eef5fc; }
+.place-list small { color: var(--muted); }
+.place-add { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.results li.fav { background: #fffbea; }
+.place .row .star { flex: none; padding: 0 10px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
