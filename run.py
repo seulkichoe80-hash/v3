@@ -1,4 +1,4 @@
-"""헬기 운항기상 판단 도우미 실행: python run.py  (가짜 자료 시연: python run.py --mock)"""
+"""하늘길119(소방헬기 출동 운항판단 지원시스템) 실행: python run.py  (가짜 자료 시연: python run.py --mock)"""
 import argparse, json, os, sys, threading, webbrowser
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
@@ -8,7 +8,7 @@ from server.store import FileStore
 
 
 def main():
-    ap = argparse.ArgumentParser(description='헬기 운항기상 판단 도우미')
+    ap = argparse.ArgumentParser(description='하늘길119(소방헬기 출동 운항판단 지원시스템)')
     ap.add_argument('--port', type=int, default=8000)
     ap.add_argument('--mock', action='store_true', help='기상청 대신 시험용 자료 사용')
     ap.add_argument('--no-browser', action='store_true')
@@ -32,7 +32,7 @@ def main():
                       access_code=os.environ.get('ACCESS_CODE', ''),
                       notam_store=FileStore(os.environ.get('HELIWX_NOTAM_FILE') or os.path.join(ROOT, 'logs', 'notams.json')))
     url = f'http://localhost:{a.port}/'
-    print(f'헬기 운항기상 판단 도우미 실행 중: {url}  {"(시험 자료)" if a.mock else ""}  종료: Ctrl+C')
+    print(f'하늘길119(소방헬기 출동 운항판단 지원시스템) 실행 중: {url}  {"(시험 자료)" if a.mock else ""}  종료: Ctrl+C')
     if not a.no_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:

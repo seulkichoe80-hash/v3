@@ -23,7 +23,7 @@ FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 
 def urllib_fetch(url, timeout=5):
-    req = urllib.request.Request(url, headers={'User-Agent': 'heli-wx/1.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'haneulgil119/1.0'})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read()
     for enc in ('utf-8', 'cp949'):

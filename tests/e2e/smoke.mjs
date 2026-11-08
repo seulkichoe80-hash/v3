@@ -30,6 +30,7 @@ if (!(await page.isChecked('#coord-toggle'))) fail('지도 없음인데 좌표 �
 await page.uncheck('#coord-toggle');
 if (await page.isVisible('#pt-from-coord') || await page.isVisible('#coord-fmt')) fail('좌표 입력을 끄면 숨겨져야 함');
 await page.check('#coord-toggle');
+if ((await page.title()) !== '하늘길119') fail('탭 제목이 하늘길119 아님');
 if ((await page.inputValue('#cruise')) !== '120') fail('순항속도 기본값 120 아님');
 // 주요지점: 추가 → 목록 선택으로 목적지 지정 → 카드 검색에 ★ 표시 → 카드 ★저장 → 삭제
 await page.click('#places-sum');
