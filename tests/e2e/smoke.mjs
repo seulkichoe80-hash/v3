@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 let pw; try { pw = require('playwright'); } catch { pw = require('/opt/node22/lib/node_modules/playwright'); }
 
 const PORT = 8010, ROOT = new URL('../../', import.meta.url).pathname;
-const srv = spawn('python3', ['run.py', '--mock', '--port', String(PORT), '--no-browser'], { cwd: ROOT });
+const srv = spawn('python3', ['run.py', '--mock', '--port', String(PORT), '--no-browser'], { cwd: ROOT, env: { ...process.env, ACCESS_CODE: 'fire119' } });
 const fail = (m) => { console.error('FAIL:', m); srv.kill(); process.exit(1); };
 for (let i = 0; i < 40; i++) { try { await fetch(`http://localhost:${PORT}/api/client-config`); break; } catch { await new Promise((r) => setTimeout(r, 200)); } }
 
@@ -17,6 +17,11 @@ page.on('console', (m) => { if (m.type() === 'error' && !/dapi\.kakao|ERR_|Faile
 page.on('pageerror', (e) => errors.push(String(e)));
 await page.route(/dapi\.kakao\.com/, (r) => r.abort());
 await page.goto(`http://localhost:${PORT}/`);
+await page.waitForSelector('#code-gate:not([hidden])', { timeout: 10000 }).catch(() => fail('접속코드 입력 창이 보이지 않음'));
+await page.fill('#code-input', 'wrong'); await page.click('#code-ok');
+await page.waitForFunction(() => /올바르지/.test(document.querySelector('#code-msg').textContent), null, { timeout: 5000 }).catch(() => fail('틀린 코드 안내 없음'));
+await page.fill('#code-input', 'fire119'); await page.click('#code-ok');
+await page.waitForSelector('#code-gate[hidden]', { state: 'attached', timeout: 5000 }).catch(() => fail('맞는 코드로 통과 못함'));
 await page.waitForSelector('#coord-fallback:not([hidden])', { timeout: 15000 }).catch(() => fail('좌표 직접 입력 대체 화면이 보이지 않음'));
 await page.fill('#from-name', '김포'); await page.fill('#from-lat', '37.5583'); await page.fill('#from-lon', '126.7906');
 await page.fill('#to-name', '서울역'); await page.fill('#to-lat', '37.5547'); await page.fill('#to-lon', '126.9707');
@@ -33,6 +38,10 @@ if ((await page.locator('#rows tr').count()) < 6) fail('근거 표 행 부족');
 if (!(await page.textContent('#landsea-auto')).includes('해상 기준')) fail('지도 없음 시 해상(엄격) 기준 안내 없음');
 await page.fill('#cruise', '0'); await page.dispatchEvent('#cruise', 'change'); await page.click('#run');
 await page.waitForFunction(() => document.querySelector('#run-msg').textContent.includes('판단 완료'), null, { timeout: 5000 }).catch(() => fail('순항속도 0 입력 시 멈춤'));
+const hist = await page.evaluate(() => JSON.parse(localStorage.getItem('heliwx.history') || '[]'));
+if (hist.length < 1 || hist[0].to !== '서울역') fail('브라우저 이력 저장 안 됨');
+const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.click('#history-csv')]);
+if (!dl) fail('이력 CSV 내려받기 안 됨');
 if (errors.length) fail('콘솔 오류: ' + errors.join(' / '));
 if (process.env.SHOT) await page.screenshot({ path: ROOT + process.env.SHOT, fullPage: true });
 console.log('PASS grade=' + grade);

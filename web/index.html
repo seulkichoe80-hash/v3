@@ -7,6 +7,15 @@
 <link rel="stylesheet" href="/web/style.css">
 </head>
 <body>
+<div id="code-gate" class="gate" hidden role="dialog" aria-modal="true" aria-labelledby="code-title">
+  <form class="gate-box" id="code-form">
+    <h2 id="code-title">접속코드 입력</h2>
+    <p>기관에서 안내받은 접속코드를 입력하세요. 이 브라우저에 기억됩니다.</p>
+    <input id="code-input" type="password" autocomplete="current-password" aria-label="접속코드">
+    <button id="code-ok" type="submit" class="run">확인</button>
+    <p id="code-msg" class="hint" role="alert"></p>
+  </form>
+</div>
 <header class="top">
   <div class="brand">
     <span class="mark" aria-hidden="true">▲</span>
@@ -94,6 +103,8 @@
     <h3>보고문</h3>
     <textarea id="report-text" rows="5" readonly></textarea>
     <button id="copy" type="button" class="copy">보고문 복사</button>
+    <h3>조회 이력 <small id="history-count"></small></h3>
+    <button id="history-csv" type="button" class="copy">이력 CSV 내려받기</button>
   </section>
 </main>
 

@@ -117,3 +117,9 @@ tr.RED td { background: #fff7f6; }
   .top { padding: 10px 16px; }
   .clock { display: none; }
 }
+
+.gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(13, 34, 54, .82); }
+.gate[hidden] { display: none; }
+.gate-box { width: min(380px, 100%); background: #fff; border-radius: 12px; padding: 20px; }
+.gate-box h2 { font-size: 18px; margin-bottom: 6px; }
+.gate-box p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }

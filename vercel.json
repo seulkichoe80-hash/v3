@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/", "destination": "/web/index.html" }
+  ],
+  "functions": {
+    "api/index.py": { "includeFiles": "{server/**,config.json}", "maxDuration": 20 }
+  }
+}

@@ -19,7 +19,29 @@
    "bases": [ { "name": "OO 항공대", "lat": 37.0000, "lon": 127.0000 } ]
    ```
 
-## 2. 실행
+
+## 1-1. 웹 배포 (Vercel, 링크로 공유)
+
+사용자는 **링크만 열면** 됩니다(설치 없음). 관리자가 한 번만 설정합니다.
+
+1. 이 코드를 GitHub 저장소에 올립니다.
+2. [vercel.com](https://vercel.com) → **Add New… → Project** → 저장소 **Import**
+   - Framework Preset: **Other** (빌드 설정은 비워 둠)
+3. **Environment Variables**에 입력합니다.
+   | 이름 | 값 |
+   |---|---|
+   | `KMA_AUTH_KEY` | 기상청 API허브 인증키 |
+   | `KAKAO_JS_KEY` | 카카오 JavaScript 키 |
+   | `ACCESS_CODE` | 기관 공용 접속코드(비워 두면 누구나 사용) |
+4. **Deploy** → 나온 주소(예: `https://heli-wx.vercel.app`)를 카카오 개발자 콘솔의 Web 사이트 도메인에 추가합니다.
+5. 링크와 접속코드를 공유합니다.
+
+- 키는 Vercel 환경변수에만 있고 코드·GitHub·브라우저에는 나가지 않습니다.
+- 기상 응답은 Vercel 캐시에 1~5분간 공유되어 여러 명이 써도 기상청 호출이 늘지 않습니다.
+- 조회 이력은 각 브라우저에 저장되며 화면의 **[이력 CSV 내려받기]**로 받습니다.
+- 환경변수를 바꾼 뒤에는 Vercel에서 **Redeploy**해야 반영됩니다.
+
+## 2. 로컬 실행 (인터넷 장애 대비용)
 
 ```bash
 python run.py
@@ -90,7 +112,8 @@ python server/check_api.py
 
 - API 인증키는 PC의 `config.local.json`에만 저장되고, 브라우저 화면으로 전달되지 않습니다.
 - 개인정보를 수집하지 않습니다. 처리 데이터는 공개 기상·항공정보뿐입니다.
-- 조회 이력(`logs/history.csv`)에는 시각·출발·목적지·거리·종합판정만 기록합니다.
+- 조회 이력(로컬: `logs/history.csv`, 웹: 각 브라우저)에는 시각·출발·목적지·거리·종합판정만 기록합니다.
+- 웹 배포 시 접속코드(`ACCESS_CODE`)로 사용을 제한합니다. 기상 자료 자체는 공개 정보입니다.
 
 ## 9. 개발·시험
 

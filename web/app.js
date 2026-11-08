@@ -13,6 +13,34 @@ const kstStr = (d, withDate = false) => {
   return (withDate ? `${k.getUTCMonth() + 1}/${k.getUTCDate()} ` : '') + `${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
 };
 
+const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history';
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 불가 환경 */ } },
+};
+// 모든 /api 호출은 여기로: 접속코드 헤더를 붙이고, 401이면 코드 입력 창을 다시 띄운다.
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  const code = store.get(CODE_KEY, '');
+  if (code) headers['X-Access-Code'] = code;
+  const r = await fetch(path, { ...opts, headers });
+  if (r.status === 401) { store.set(CODE_KEY, ''); showGate('접속코드가 올바르지 않습니다. 다시 입력하세요.'); throw new Error('접속코드 필요'); }
+  return r;
+}
+function showGate(msg = '') { $('code-msg').textContent = msg; $('code-gate').hidden = false; $('code-input').focus(); }
+function askCode() {
+  return new Promise((resolve) => {
+    showGate();
+    $('code-form').onsubmit = async (e) => {
+      e.preventDefault();
+      store.set(CODE_KEY, $('code-input').value.trim());
+      const r = await fetch('/api/warn', { headers: { 'X-Access-Code': store.get(CODE_KEY, '') } }).catch(() => null);
+      if (r && r.status !== 401) { $('code-gate').hidden = true; $('code-input').value = ''; resolve(); }
+      else { store.set(CODE_KEY, ''); $('code-msg').textContent = '접속코드가 올바르지 않습니다.'; }
+    };
+  });
+}
+
 const state = { config: null, kakao: null, map: null, geocoder: null, places: null, from: null, to: null, overlays: [], last: null };
 
 // ---------- 시작 ----------
@@ -20,7 +48,13 @@ async function init() {
   const tick = () => { $('clock').textContent = 'KST ' + kstStr(new Date(), true); };
   tick(); setInterval(tick, 1000);
   const cc = await (await fetch('/api/client-config')).json();
-  state.config = cc.config;
+  state.config = cc.config; state.serverLog = cc.serverLog;
+  if (cc.needsCode) {
+    const ok = store.get(CODE_KEY, '') && (await fetch('/api/warn', { headers: { 'X-Access-Code': store.get(CODE_KEY, '') } }).then((r) => r.status !== 401).catch(() => false));
+    if (!ok) await askCode();
+  }
+  $('history-csv').addEventListener('click', downloadHistory);
+  showHistoryCount();
   $('cruise').value = cc.config.cruiseKt;
   $('depart').value = kstInputNow();
   for (const [i, b] of (cc.config.bases || []).entries()) $('from-base').add(new Option(b.name, String(i)));
@@ -170,7 +204,7 @@ async function run() {
   $('run').disabled = true; $('run-msg').textContent = '기상자료 수집 중…';
   try {
     const [settled, rr] = await Promise.all([
-      Promise.allSettled(KINDS.map((k) => fetch('/api/' + k).then((r) => r.json()))),
+      Promise.allSettled(KINDS.map((k) => api('/api/' + k).then((r) => r.json()))),
       routeRegions(from, to).catch(() => ({ regions: [], seaPoints: 0, available: false })),
     ]);
     const data = {}, dataStatus = {}, warns = [];
@@ -206,8 +240,10 @@ async function run() {
     render(result, { from, to, isNight, isSea, warns });
     drawMap(result, data, from, to);
     $('run-msg').textContent = `판단 완료 ${kstStr(new Date())}`;
-    fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: from.name, to: to.name, overall: result.overall, distanceKm: result.distanceKm }) }).catch(() => {});
+    const entry = { time: new Date().toISOString(), from: from.name, to: to.name, distanceKm: result.distanceKm, overall: result.overall };
+    store.set(HIST_KEY, [entry, ...store.get(HIST_KEY, [])].slice(0, 5000));
+    showHistoryCount();
+    if (state.serverLog) api('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
   } catch (e) {
     $('run-msg').textContent = '오류: ' + e.message + ' — 하단 수동 확인 링크를 이용하세요.';
   } finally { $('run').disabled = false; }
@@ -247,6 +283,17 @@ function render(r, ctx) {
     + (out ? `<p class="hint">확인 대상 아님(D 시리즈 외) ${out}건</p>` : '');
 
   $('report-text').value = r.reportText;
+}
+
+function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
+function downloadHistory() {
+  const rows = store.get(HIST_KEY, []);
+  const cell = (v) => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+  const csv = ['시각(KST),출발,목적지,거리km,종합판정', ...rows.map((r) => [kstStr(r.time, true), r.from, r.to, r.distanceKm, GRADE_TEXT[r.overall] || r.overall].map(cell).join(','))].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `heli-wx-이력-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 async function copyReport() {

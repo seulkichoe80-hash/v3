@@ -27,7 +27,8 @@ def main():
 
     client = KmaClient(local.get('kmaAuthKey', ''), config, fetch=mock_fetch if a.mock else urllib_fetch)
     srv = make_server(a.port, client, config, local.get('kakaoJsKey', ''),
-                      os.path.join(ROOT, 'logs', 'history.csv'), os.path.join(ROOT, 'web'))
+                      os.path.join(ROOT, 'logs', 'history.csv'), os.path.join(ROOT, 'web'),
+                      access_code=os.environ.get('ACCESS_CODE', ''))
     url = f'http://localhost:{a.port}/'
     print(f'헬기 운항기상 판단 도우미 실행 중: {url}  {"(시험 자료)" if a.mock else ""}  종료: Ctrl+C')
     if not a.no_browser:
