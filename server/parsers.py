@@ -118,6 +118,22 @@ def parse_aws(text, stations):
 
 def parse_warn(text):
     out = []
+    src = str(text or '').strip()
+    if src.startswith('['):  # 실제 응답(disp=1): JSON 배열, 값 뒤 공백 패딩
+        try:
+            rows = __import__('json').loads(src)
+        except ValueError:
+            rows = []
+        for r in rows if isinstance(rows, list) else []:
+            if not isinstance(r, dict):
+                continue
+            g = lambda k: str(r.get(k, '') or '').strip()
+            kind, level = WARN_CODE.get(g('WRN'), g('WRN')), WARN_LVL.get(g('LVL'), g('LVL'))
+            if not HANGUL.search(kind + level):
+                continue
+            out.append({'regUp': g('REG_UP'), 'regUpName': g('REG_UP_KO'), 'regId': g('REG_ID'), 'regName': g('REG_KO'),
+                        'tmFc': kst_to_iso(g('TM_FC')), 'tmEf': kst_to_iso(g('TM_EF')), 'kind': kind, 'level': level, 'cmd': g('CMD')})
+        return out
     for s in _data_lines(text):
         p = [x.strip() for x in s.split(',')]
         if len(p) < 9:
@@ -265,4 +281,165 @@ def parse_taf(raw, airports, now=None):
         return {'icao': icao, 'name': ap['name'], 'lat': ap['lat'], 'lon': ap['lon'], 'issued': iso(issued),
                 'validFrom': iso(vfrom), 'validTo': iso(vto), 'groups': out, 'raw': raw}
     except (StopIteration, AttributeError, IndexError, ValueError, TypeError):
+        return None
+
+
+# ---------------- IWXXM (기상청 AmmIwxxmService 실제 응답 형식) ----------------
+import json as _json
+import xml.etree.ElementTree as _ET
+
+
+def _ln(tag):
+    return tag.rsplit('}', 1)[-1]
+
+
+def _find(el, *names):
+    """하위 요소 중 로컬 이름 경로가 names인 첫 요소."""
+    cur = [el]
+    for n in names:
+        nxt = []
+        for c in cur:
+            nxt += [x for x in c.iter() if _ln(x.tag) == n and x is not c]
+        if not nxt:
+            return None
+        cur = nxt[:1]
+    return cur[0]
+
+
+def _children(el, name):
+    return [x for x in el if _ln(x.tag) == name]
+
+
+def _attr(el, name):
+    for k, v in el.attrib.items():
+        if _ln(k) == name:
+            return v
+    return None
+
+
+def _num_el(el):
+    if el is None or _attr(el, 'nil') == 'true' or _attr(el, 'nilReason'):
+        return None
+    try:
+        return float((el.text or '').strip())
+    except ValueError:
+        return None
+
+
+def extract_iwxxm(text, kind):
+    """JSON 응답(items.item[].metarMsg/tafMsg) 또는 원문에서 IWXXM XML 문자열 목록."""
+    tag = '<iwxxm:' + kind
+    out = []
+
+    def walk(o):
+        if isinstance(o, dict):
+            for v in o.values(): walk(v)
+        elif isinstance(o, list):
+            for v in o: walk(v)
+        elif isinstance(o, str) and tag in o:
+            out.append(o)
+    try:
+        walk(_json.loads(text))
+    except (ValueError, TypeError):
+        out = re.findall(r'(<iwxxm:' + kind + r'[\s>].*?</iwxxm:' + kind + r'>)', str(text or ''), flags=re.S)
+    return out
+
+
+def _iw_vis_ceil(fc):
+    """MeteorologicalAerodromeObservation/Forecast → (visM, ceilFt, ceilUnknown, hasCloudInfo)."""
+    if _attr(fc, 'cloudAndVisibilityOK') == 'true':
+        return 10000, None, False, True
+    v = _num_el(_find(fc, 'prevailingVisibility'))
+    vis = None if v is None else (10000 if v >= 9999 else int(v))
+    cloud = _find(fc, 'cloud')
+    if cloud is None:
+        return vis, None, True, False
+    if _attr(cloud, 'nilReason'):  # NSC/NCD 등 '운고 없음'
+        return vis, None, False, True
+    ceil, unknown = None, False
+    vv = _find(cloud, 'verticalVisibility')
+    if vv is not None:
+        h = _num_el(vv)
+        if h is None: unknown = True
+        else: ceil = int(h)
+    for layer in [x for x in cloud.iter() if _ln(x.tag) == 'CloudLayer']:
+        amt = _find(layer, 'amount')
+        href = (_attr(amt, 'href') or '') if amt is not None else ''
+        if href.endswith(('/BKN', '/OVC')):
+            h = _num_el(_find(layer, 'base'))
+            if h is None: unknown = True
+            else: ceil = int(h) if ceil is None else min(ceil, int(h))
+    return vis, ceil, (unknown and ceil is None), True
+
+
+def _tpos(el, *names):
+    e = _find(el, *names)
+    return (e.text or '').strip() if e is not None and e.text else None
+
+
+def _isoz(s):
+    return s if s and s.endswith('Z') else (s + 'Z' if s else None)
+
+
+def parse_metar_iwxxm(xml, airports):
+    try:
+        root = _ET.fromstring(xml)
+        icao = _tpos(root, 'locationIndicatorICAO') or _tpos(root, 'designator')
+        obs_el = _find(root, 'observation')
+        fc = _find(obs_el, 'MeteorologicalAerodromeObservation') if obs_el is not None else None
+        if not icao or fc is None:
+            return None
+        vis, ceil, unknown, _ = _iw_vis_ceil(fc)
+        wind = _find(fc, 'AerodromeSurfaceWind')
+        wd = wk = gk = None
+        if wind is not None:
+            d = _num_el(_find(wind, 'meanWindDirection'))
+            wd = None if d is None else int(d)
+            s_el = _find(wind, 'meanWindSpeed'); s = _num_el(s_el)
+            g_el = _find(wind, 'windGustSpeed'); g = _num_el(g_el)
+            f = (1 / 0.5144) if s_el is not None and 'm/s' in (_attr(s_el, 'uom') or '') else 1
+            wk = None if s is None else round(s * f); gk = None if g is None else round(g * f)
+        ap = _airport(icao, airports)
+        return {'icao': icao, 'name': ap['name'], 'lat': ap['lat'], 'lon': ap['lon'],
+                'obsTime': _isoz(_tpos(root, 'observationTime', 'timePosition')),
+                'visM': vis, 'ceilFt': ceil, 'ceilUnknown': unknown, 'windDir': wd, 'windKt': wk, 'gustKt': gk,
+                'raw': 'IWXXM'}
+    except (_ET.ParseError, ValueError, TypeError, AttributeError):
+        return None
+
+
+CHANGE = {'BECOMING': 'BECMG', 'TEMPORARY_FLUCTUATIONS': 'TEMPO', 'FROM': 'FM'}
+
+
+def parse_taf_iwxxm(xml, airports):
+    try:
+        root = _ET.fromstring(xml)
+        icao = _tpos(root, 'locationIndicatorICAO') or _tpos(root, 'designator')
+        vp = _find(root, 'validPeriod')
+        vfrom, vto = _isoz(_tpos(vp, 'beginPosition')), _isoz(_tpos(vp, 'endPosition'))
+        if not icao or not vfrom or not vto:
+            return None
+        groups = []
+        for wrap_name in ('baseForecast', 'changeForecast'):
+            for wrap in _children(root, wrap_name):
+                fc = _find(wrap, 'MeteorologicalAerodromeForecast')
+                if fc is None:
+                    continue
+                ind = _attr(fc, 'changeIndicator')
+                typ = 'BASE' if wrap_name == 'baseForecast' else CHANGE.get(ind, 'PROB' if ind and ind.startswith('PROBABILITY') else 'TEMPO')
+                pt = _find(fc, 'phenomenonTime')
+                b = _isoz(_tpos(pt, 'beginPosition') or _tpos(pt, 'timePosition')) if pt is not None else vfrom
+                e = _isoz(_tpos(pt, 'endPosition')) if pt is not None else None
+                vis, ceil, _, _ = _iw_vis_ceil(fc)
+                if typ in ('BECMG', 'FM') or not e:
+                    e = vto
+                groups.append({'type': typ, 'from': b or vfrom, 'to': e, 'visM': vis, 'ceilFt': ceil})
+        mains = [g for g in groups if g['type'] in ('BASE', 'FM')]
+        for a, b in zip(mains, mains[1:]):
+            a['to'] = b['from']
+        ap = _airport(icao, airports)
+        return {'icao': icao, 'name': ap['name'], 'lat': ap['lat'], 'lon': ap['lon'],
+                'issued': _isoz(_tpos(root, 'issueTime', 'timePosition')), 'validFrom': vfrom, 'validTo': vto,
+                'groups': groups, 'raw': 'IWXXM'}
+    except (_ET.ParseError, ValueError, TypeError, AttributeError):
         return None

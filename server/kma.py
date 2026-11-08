@@ -70,7 +70,8 @@ class KmaClient:
     def _get(self, kind, **kw):
         text = self.fetch(self._url(kind, **kw), timeout=self.timeout)
         # typ01 표 형식 응답은 '#' 주석/헤더 줄을 가진다. 없으면 오류 응답(활용신청 안 됨, 인증 실패 등)으로 본다.
-        if kind not in ('metar', 'taf') and not any(l.lstrip().startswith('#') for l in text.splitlines()):
+        json_ok = kind == 'warn' and text.lstrip().startswith('[')
+        if kind not in ('metar', 'taf') and not json_ok and not any(l.lstrip().startswith('#') for l in text.splitlines()):
             raise RuntimeError('기상청 응답 형식 아님: ' + text.strip()[:120])
         return text
 
@@ -112,10 +113,13 @@ class KmaClient:
                 except Exception:
                     return []
                 if kind == 'metar':
-                    raws = P.extract_reports(text, 'METAR') + P.extract_reports(text, 'SPECI')
-                    parsed = [P.parse_metar(r, ap, now) for r in raws]
+                    parsed = [P.parse_metar_iwxxm(x, ap) for x in P.extract_iwxxm(text, 'METAR') + P.extract_iwxxm(text, 'SPECI')]
+                    if not parsed:  # 문자 전문 형식 대비
+                        parsed = [P.parse_metar(r, ap, now) for r in P.extract_reports(text, 'METAR') + P.extract_reports(text, 'SPECI')]
                 else:
-                    parsed = [P.parse_taf(r, ap, now) for r in P.extract_reports(text, 'TAF')]
+                    parsed = [P.parse_taf_iwxxm(x, ap) for x in P.extract_iwxxm(text, 'TAF')]
+                    if not parsed:
+                        parsed = [P.parse_taf(r, ap, now) for r in P.extract_reports(text, 'TAF')]
                 return [p for p in parsed if p and p['icao'] == a['icao']]
             with ThreadPoolExecutor(max_workers=8) as ex:
                 lists = list(ex.map(one, ap))

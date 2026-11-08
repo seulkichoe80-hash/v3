@@ -84,3 +84,41 @@ class Review(unittest.TestCase):
         self.assertTrue(P.parse_metar('METAR RKSS 080500Z 32012KT 9999 12/10 Q1015=', AIRPORTS, NOW)['ceilUnknown'])
         self.assertFalse(P.parse_metar('METAR RKSS 080500Z 32012KT 9999 FEW030 12/10 Q1015=', AIRPORTS, NOW)['ceilUnknown'])
         self.assertFalse(P.parse_metar('METAR RKSI 080500Z 30008KT CAVOK 13/03 Q1016=', AIRPORTS, NOW)['ceilUnknown'])
+
+class Real(unittest.TestCase):
+    """2026-11-08 실제 기상청 API허브 응답"""
+    def test_metar_iwxxm(self):
+        xs = P.extract_iwxxm(fx('metar_iwxxm.json'), 'METAR'); self.assertEqual(len(xs), 1)
+        m = P.parse_metar_iwxxm(xs[0], AIRPORTS)
+        self.assertEqual(m['icao'], 'RKSS'); self.assertEqual(m['obsTime'], '2026-11-08T07:00:00Z')
+        self.assertEqual(m['visM'], 10000); self.assertEqual(m['ceilFt'], 7000); self.assertFalse(m['ceilUnknown'])
+        self.assertEqual((m['windDir'], m['windKt'], m['gustKt']), (360, 8, None))
+        self.assertAlmostEqual(m['lat'], 37.5583)   # 좌표는 config 공항표 사용
+
+    def test_metar_iwxxm_variants(self):
+        x = P.extract_iwxxm(fx('metar_iwxxm.json'), 'METAR')[0]
+        cav = P.parse_metar_iwxxm(x.replace('cloudAndVisibilityOK="false"', 'cloudAndVisibilityOK="true"'), AIRPORTS)
+        self.assertEqual(cav['visM'], 10000); self.assertIsNone(cav['ceilFt']); self.assertFalse(cav['ceilUnknown'])
+        few = P.parse_metar_iwxxm(x.replace('/OVC', '/FEW'), AIRPORTS); self.assertIsNone(few['ceilFt']); self.assertFalse(few['ceilUnknown'])
+        nobase = P.parse_metar_iwxxm(x.replace('<iwxxm:base uom="[ft_i]">7000</iwxxm:base>', '<iwxxm:base nilReason="http://codes.wmo.int/common/nil/notObservable" uom="N/A" xsi:nil="true"/>'), AIRPORTS)
+        self.assertIsNone(nobase['ceilFt']); self.assertTrue(nobase['ceilUnknown'])
+        import re
+        nocloud = P.parse_metar_iwxxm(re.sub(r'<iwxxm:cloud>.*</iwxxm:cloud>', '', x, flags=re.S), AIRPORTS)
+        self.assertTrue(nocloud['ceilUnknown'])
+        vv = P.parse_metar_iwxxm(re.sub(r'<iwxxm:cloud>.*</iwxxm:cloud>', '<iwxxm:cloud><iwxxm:AerodromeCloud><iwxxm:verticalVisibility uom="[ft_i]">200</iwxxm:verticalVisibility></iwxxm:AerodromeCloud></iwxxm:cloud>', x, flags=re.S), AIRPORTS)
+        self.assertEqual(vv['ceilFt'], 200)
+        self.assertIsNone(P.parse_metar_iwxxm('<not xml', AIRPORTS))
+
+    def test_taf_iwxxm(self):
+        t = P.parse_taf_iwxxm(P.extract_iwxxm(fx('taf_iwxxm.json'), 'TAF')[0], AIRPORTS)
+        self.assertEqual(t['icao'], 'RKSS'); self.assertEqual(t['issued'], '2026-11-08T05:00:00Z')
+        g = t['groups']; self.assertEqual([x['type'] for x in g], ['BASE', 'BECMG', 'BECMG'])
+        self.assertEqual((g[0]['from'], g[0]['to'], g[0]['visM'], g[0]['ceilFt']), ('2026-11-08T06:00:00Z', '2026-11-09T12:00:00Z', 10000, 6000))
+        self.assertEqual((g[1]['from'], g[1]['to'], g[1]['visM'], g[1]['ceilFt']), ('2026-11-08T11:00:00Z', '2026-11-09T12:00:00Z', None, None))
+        self.assertEqual((g[2]['visM'], g[2]['ceilFt']), (10000, None))
+
+    def test_warn_json(self):
+        w = P.parse_warn(fx('warn_real.json')); self.assertEqual(len(w), 39)
+        self.assertEqual(w[0]['regName'], '동해남부북쪽안쪽먼바다'); self.assertEqual(w[0]['kind'], '풍랑')
+        self.assertEqual(w[0]['level'], '예비'); self.assertEqual(w[0]['regUpName'], '동해남부전해상')
+        self.assertEqual(w[0]['tmEf'], '2026-11-09T08:58:00Z')

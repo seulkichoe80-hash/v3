@@ -14,8 +14,8 @@ def _count(kind, text, client):
     if kind == 'aws': return len(P.parse_aws(text, {}))
     if kind == 'warn': return len(P.parse_warn(text))
     if kind == 'lightning': return len(P.parse_lightning(text))
-    if kind == 'metar': return len([x for x in (P.parse_metar(r, ap) for r in P.extract_reports(text, 'METAR')) if x])
-    if kind == 'taf': return len([x for x in (P.parse_taf(r, ap) for r in P.extract_reports(text, 'TAF')) if x])
+    if kind == 'metar': return len([x for x in (P.parse_metar_iwxxm(r, ap) for r in P.extract_iwxxm(text, 'METAR')) if x]) or len([x for x in (P.parse_metar(r, ap) for r in P.extract_reports(text, 'METAR')) if x])
+    if kind == 'taf': return len([x for x in (P.parse_taf_iwxxm(r, ap) for r in P.extract_iwxxm(text, 'TAF')) if x]) or len([x for x in (P.parse_taf(r, ap) for r in P.extract_reports(text, 'TAF')) if x])
     return 0
 
 def run_checks(key, config, fetch=urllib_fetch, out=sys.stdout, lines=40):

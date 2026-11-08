@@ -83,3 +83,14 @@ class ReviewC1(unittest.TestCase):
         c = KmaClient(KEY, CONFIG, fetch=f, now=Clock())
         for kind in ('warn', 'lightning', 'asos', 'aws'):
             r = c.get(kind); self.assertTrue(r['error'], kind); self.assertEqual(r['items'], [])
+
+class RealFormats(unittest.TestCase):
+    def test_iwxxm_and_warn_json_through_client(self):
+        def f(url, timeout=5):
+            name = 'metar_iwxxm.json' if 'getMetar' in url else 'taf_iwxxm.json' if 'getTaf' in url else 'warn_real.json' if 'wrn_now' in url else None
+            if name: return open(os.path.join(ROOT, 'tests', 'fixtures', 'kma', name), encoding='utf-8').read()
+            return mock_fetch(url, timeout)
+        c = KmaClient(KEY, CONFIG, fetch=f, now=Clock())
+        m = c.get('metar'); self.assertIsNone(m['error']); self.assertEqual(m['items'][0]['icao'], 'RKSS')
+        t = c.get('taf'); self.assertIsNone(t['error']); self.assertEqual(len(t['items'][0]['groups']), 3)
+        w = c.get('warn'); self.assertIsNone(w['error']); self.assertEqual(len(w['items']), 39)
