@@ -224,3 +224,8 @@ table.kv { table-layout: fixed; }
 table.kv td, table.kv th { overflow-wrap: anywhere; }
 table.kv td { white-space: normal; }
 .rawbtns { margin: 6px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+
+.stale { position: sticky; top: 0; z-index: 90; padding: 8px 16px; background: #fff3d6; border-bottom: 2px solid var(--yellow-dot); font-weight: 700; font-size: 13px; }
+.stale[hidden] { display: none; }
+.stale button { margin-left: 8px; padding: 4px 10px; border: 1px solid var(--yellow); background: #fff; border-radius: 6px; font-weight: 700; cursor: pointer; }
+.ver { font-size: 11px; color: var(--muted); }

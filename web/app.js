@@ -55,8 +55,10 @@ const state = { config: null, kakao: null, map: null, geocoder: null, placeSvc: 
 async function init() {
   const tick = () => { $('clock').textContent = 'KST ' + kstStr(new Date(), true); };
   tick(); setInterval(tick, 1000);
-  const cc = await (await fetch('/api/client-config')).json();
-  state.config = cc.config; state.serverLog = cc.serverLog;
+  const cc = await (await fetch('/api/client-config', { cache: 'no-store' })).json();
+  state.config = cc.config; state.version = cc.version || '';
+  $('ver').textContent = state.version ? `버전 ${state.version}` : '';
+  $('reload-btn').addEventListener('click', () => location.reload()); state.serverLog = cc.serverLog;
   if (cc.needsCode) {
     const ok = store.get(CODE_KEY, '') && (await fetch('/api/warn', { headers: { 'X-Access-Code': store.get(CODE_KEY, '') } }).then((r) => r.status !== 401 && r.status !== 429).catch(() => false));
     if (!ok) await askCode();
@@ -487,12 +489,22 @@ function routeRegions(route) {
   });
 }
 
+// ---------- 낡은 화면 감지 ----------
+// 열어 둔 페이지는 옛 코드를 그대로 쓰므로, 서버 버전이 바뀌었으면 새로고침 안내를 띄운다.
+async function checkVersion() {
+  try {
+    const d = await (await fetch('/api/client-config', { cache: 'no-store' })).json();
+    if (state.version && d.version && d.version !== state.version) $('stale-banner').hidden = false;
+  } catch { /* 확인 실패는 무시 */ }
+}
+
 // ---------- 실행 ----------
 async function run() {
   const { pts, bad } = readyPoints();
   if (bad.length) { $('run-msg').textContent = `좌표가 없거나 형식이 틀린 지점: ${bad.join(', ')}`; return; }
   const from = pts[0], to = pts[pts.length - 1];
   $('run').disabled = true; $('run-msg').textContent = '기상자료 수집 중…';
+  checkVersion();
   try {
     const [settled, rr] = await Promise.all([
       Promise.allSettled(KINDS.map((k) => api('/api/' + k).then((r) => r.json()))),

@@ -116,3 +116,11 @@ class AttemptsLeft(unittest.TestCase):
             def rl_count(self, k): raise OSError('down')
             def rl_hit(self, k, t): raise OSError('down')
         self.assertNotIn('attemptsLeft', json.loads(req('GET', '/api/asos', {'X-Access-Code': 'bad'}, store=Boom())[2]))
+
+class Version(unittest.TestCase):
+    def test_client_config_reports_version(self):
+        import os
+        for env, want in (({'VERCEL_GIT_COMMIT_SHA': 'abcdef1234567890'}, 'abcdef1'), ({}, 'local')):
+            with mock.patch.dict(os.environ, env, clear=False):
+                if not env: os.environ.pop('VERCEL_GIT_COMMIT_SHA', None)
+                d = json.loads(req('GET', '/api/client-config', code='')[2]); self.assertEqual(d['version'], want)

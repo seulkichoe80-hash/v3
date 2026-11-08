@@ -61,7 +61,8 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
     path_q = parse_qs(qs)
     if method == 'GET' and path == '/api/client-config':
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
-                           'serverLog': bool(log_path), 'notamShared': notam_store is not None})
+                           'serverLog': bool(log_path), 'notamShared': notam_store is not None,
+                           'version': (os.environ.get('VERCEL_GIT_COMMIT_SHA') or 'local')[:7]})
     if method not in ('GET', 'HEAD') and not _same_origin(headers):
         return _json(403, {'error': '허용되지 않은 출처의 요청입니다'})
     if access_code:
