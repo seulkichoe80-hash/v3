@@ -178,7 +178,7 @@ export function evaluate(input) {
 
   const assessed = notams.map((n) => assessNotam(n, from, to, departUtc, arriveUtc, config.radius.notamNearNm));
   const relevant = assessed.filter((n) => n.inScope && n.grade !== 'GREEN');
-  if (!notamsProvided) rows.push({ segment: '경로', item: 'NOTAM', value: '미입력', limit: '경로 관련 없음', grade: 'NA', source: 'xNotam', obsTime: null, note: 'NOTAM 미입력 — xNotam 조회 후 붙여넣기' });
+  if (!notamsProvided) rows.push({ segment: '경로', item: 'NOTAM', value: '미입력', limit: '경로 관련 없음', grade: 'NA', source: 'xNotam', obsTime: null, note: 'xNotam 조회 후 붙여넣기' });
   else if (!relevant.length) rows.push({ segment: '경로', item: 'NOTAM', value: `경로 관련 D NOTAM 없음 (입력 ${assessed.length}건)`, limit: '경로 관련 없음', grade: 'GREEN', source: 'xNotam', obsTime: null, note: '' });
   for (const n of relevant) {
     const rel = n.relation === 'CROSS' ? '경로 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : '위치 해석 불가';
@@ -211,8 +211,7 @@ function buildReport(r, input) {
   const dest = r.rows.filter((x) => x.segment === '목적지');
   if (dest.length) parts.push('목적지 ' + dest.map((x) => `${x.item} ${x.value}(${GRADE_TEXT[x.grade]})`).join('·'));
   for (const x of r.rows.filter((x) => x.segment !== '목적지' && x.grade !== 'GREEN')) {
-    const note = x.note && !x.note.startsWith(x.value) ? ' — ' + x.note : '';
-    parts.push(`${x.item}${x.segment !== '경로' ? '(' + x.segment + ')' : ''} ${x.note && x.note.startsWith(x.value) ? x.note : x.value + note}`);
+    parts.push(`${x.item}${x.segment !== '경로' ? '(' + x.segment + ')' : ''} ${x.value}${x.note ? ' — ' + x.note : ''}`);
   }
   const w = r.wind.find((x) => x.segment === '목적지');
   if (w && w.windMs !== null) parts.push(`바람(목적지) ${dirText(w.windDir)} ${w.windMs}m/s${w.gustMs ? ' 순간 ' + w.gustMs + 'm/s' : ''}${w.trend ? ' ' + w.trend : ''}`);
