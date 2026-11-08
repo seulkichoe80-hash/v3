@@ -163,3 +163,10 @@ input.bad { border-color: var(--red); background: #fff7f6; }
 body:not(.coords-on) .coord-only { display: none !important; }
 .place .loc { font-size: 12px; color: var(--muted); margin-top: 4px; }
 body.coords-on .place .loc { display: none; }
+
+.nslot > summary { cursor: pointer; list-style: none; padding: 2px 0; }
+.nslot > summary::-webkit-details-marker { display: none; }
+.nslot > summary::before { content: "▶"; font-size: 10px; color: var(--muted); margin-right: 2px; transition: transform .15s; }
+.nslot[open] > summary::before { transform: rotate(90deg); }
+.nslot .nh .st { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.nslot.dirty .nh .st { color: var(--yellow); font-weight: 700; }

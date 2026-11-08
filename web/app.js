@@ -42,7 +42,7 @@ function askCode() {
   });
 }
 
-const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to', notamShared: false, slots: {}, slotCount: 4,
+const state = { config: null, kakao: null, map: null, geocoder: null, places: null, overlays: [], last: null, clickTarget: 'to', notamShared: false, slots: {}, slotCount: 2, openSlots: new Set(),
   points: [{ role: 'from', name: '', lat: null, lon: null, text: '', stayMin: 0 }, { role: 'to', name: '', lat: null, lon: null, text: '', stayMin: 0 }] };
 
 // ---------- 시작 ----------
@@ -64,7 +64,7 @@ async function init() {
   setCoordsOn(store.get(COORD_ON_KEY, false), false);
   $('coord-toggle').addEventListener('change', (e) => setCoordsOn(e.target.checked, true));
   $('add-via').addEventListener('click', addVia);
-  $('notam-add').addEventListener('click', () => { if (state.slotCount < MAX_SLOTS) { state.slotCount++; renderSlots(); } });
+  $('notam-add').addEventListener('click', () => { if (state.slotCount < MAX_SLOTS) { state.slotCount++; state.openSlots.add(state.slotCount); renderSlots(); } });
   $('notam-reload').addEventListener('click', loadNotams);
   loadNotams();
   for (const id of ['depart', 'cruise']) $(id).addEventListener('change', updateAuto);
@@ -242,7 +242,7 @@ async function loadNotams() {
   state.notamShared = shared;
   state.slots = {};
   for (const [k, v] of Object.entries(slots)) state.slots[+k] = { text: v.text, savedText: v.text, savedAt: v.savedAt };
-  state.slotCount = Math.min(MAX_SLOTS, Math.max(4, ...Object.keys(state.slots).map(Number)));
+  state.slotCount = Math.min(MAX_SLOTS, Math.max(2, state.slotCount, ...Object.keys(state.slots).map(Number)));
   $('notam-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})`
     : shared ? '상황실 공유 저장 — 저장하면 모든 사용자에게 보입니다' : '공유 저장소 미연결 — 이 브라우저에만 저장됩니다';
   renderSlots();
@@ -264,21 +264,23 @@ function slotSummary(text) {
 function renderSlots() {
   const html = [];
   for (let i = 1; i <= state.slotCount; i++) {
-    html.push(`<div class="nslot" data-n="${i}"><div class="nh"><span class="no">${CIRCLED[i - 1]}</span><span class="nt" id="notam-${i}-title"></span></div>
-      <textarea id="notam-${i}" rows="3" spellcheck="false" placeholder="(D2840/26 NOTAMN …) 붙여넣기" aria-label="NOTAM ${i}번 칸"></textarea>
-      <div class="nb"><span class="st" id="notam-${i}-status"></span>
-        <button type="button" class="mini" id="notam-${i}-save">저장</button><button type="button" class="mini" id="notam-${i}-del">삭제</button></div></div>`);
+    html.push(`<details class="nslot" data-n="${i}" ${state.openSlots.has(i) ? 'open' : ''}>
+      <summary class="nh" id="notam-${i}-sum"><span class="no">${CIRCLED[i - 1]}</span><span class="nt" id="notam-${i}-title"></span><span class="st" id="notam-${i}-status"></span></summary>
+      <textarea id="notam-${i}" rows="4" spellcheck="false" placeholder="(D2840/26 NOTAMN …) 붙여넣기" aria-label="NOTAM ${i}번 칸"></textarea>
+      <div class="nb"><span class="st"></span>
+        <button type="button" class="mini" id="notam-${i}-save">저장</button><button type="button" class="mini" id="notam-${i}-del">삭제</button></div></details>`);
   }
   $('notam-slots').innerHTML = html.join('');
   for (let i = 1; i <= state.slotCount; i++) {
     const ta = $(`notam-${i}`), s = state.slots[i] || { text: '', savedText: '', savedAt: null };
+    ta.closest('details').addEventListener('toggle', (e) => { if (e.target.open) state.openSlots.add(i); else state.openSlots.delete(i); });
     ta.value = s.text || '';
     const refresh = () => {
       const cur = state.slots[i] || { text: '', savedText: '', savedAt: null };
       const sum = slotSummary(ta.value);
       const t = $(`notam-${i}-title`); t.textContent = sum.t; t.className = 'nt ' + sum.cls;
       const dirty = ta.value !== (cur.savedText || '');
-      $(`notam-${i}-status`).textContent = dirty ? '저장 안 됨(수정 중)' : cur.savedAt ? `저장됨 ${kstStr(cur.savedAt, true)}` : '';
+      $(`notam-${i}-status`).textContent = dirty ? '· 저장 안 됨' : cur.savedAt ? `· 저장됨 ${kstStr(cur.savedAt, true)}` : '';
       ta.closest('.nslot').classList.toggle('dirty', dirty);
     };
     ta.addEventListener('input', () => { state.slots[i] = { ...(state.slots[i] || {}), text: ta.value }; refresh(); });
