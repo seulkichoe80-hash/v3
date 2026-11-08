@@ -17,7 +17,7 @@ ENDPOINTS = {
     'lightning': H1 + 'lgt_pnt.php?tm1={tm_30ago}&tm2={tm_min}&help=0',
     'metar': H2 + 'AmmIwxxmService/getMetar?pageNo=1&numOfRows=10&dataType=JSON&icao={icao}',
     'taf': H2 + 'AmmIwxxmService/getTaf?pageNo=1&numOfRows=10&dataType=JSON&icao={icao}',
-    'sigwx': H1 + 'amo_sigwx.php?tm={tm_hour}&help=1',   # 저고도 중요기상예보(형식 확인용, 점검 주소 전용)
+    'sigwx': H1 + 'amo_sigwx.php?tm={tm_sigwx}&help=1',   # 저고도 중요기상예보(형식 확인용, 점검 주소 전용)
 }
 TTL_MIN = {'asos': 5, 'aws': 2, 'warn': 5, 'lightning': 2, 'metar': 5, 'taf': 10, 'stn_sfc': 1440, 'stn_aws': 1440}
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tests', 'fixtures', 'kma')
@@ -52,6 +52,14 @@ def mock_fetch(url, timeout=5):
         return f.read()
 
 
+def sigwx_issue_kst(now):
+    """가장 최근 저고도 SIGWX 발표시각(05·11·17·23 UTC)을 KST YYYYMMDDHHMM으로."""
+    t = now.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    while t.hour not in (5, 11, 17, 23):
+        t -= timedelta(hours=1)
+    return t.astimezone(P.KST).strftime('%Y%m%d%H00')
+
+
 class KmaClient:
     def __init__(self, auth_key, config, fetch=urllib_fetch, now=None, timeout=5):
         self.key, self.config, self.fetch, self.timeout = auth_key, config, fetch, timeout
@@ -63,7 +71,8 @@ class KmaClient:
         kst = self.now().astimezone(P.KST)
         t_min = kst - timedelta(minutes=kw.pop('lag_min', 2))
         fmt = dict(tm_hour=kst.strftime('%Y%m%d%H00'), tm_min=t_min.strftime('%Y%m%d%H%M'),
-                   tm_30ago=(t_min - timedelta(minutes=30)).strftime('%Y%m%d%H%M'), icao='')
+                   tm_30ago=(t_min - timedelta(minutes=30)).strftime('%Y%m%d%H%M'), icao='',
+                   tm_sigwx=sigwx_issue_kst(self.now()))
         fmt.update(kw)
         url = ENDPOINTS[kind].format(**fmt)
         return url + ('&' if '?' in url else '?') + 'authKey=' + self.key
