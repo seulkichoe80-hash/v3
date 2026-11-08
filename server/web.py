@@ -81,11 +81,12 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
         if not given and path.startswith('/api/raw/'):   # 점검 주소는 브라우저에서 ?code= 로도 열 수 있게
             given = path_q.get('code', [''])[0]
         if not hmac.compare_digest(given.encode('utf-8'), access_code.encode('utf-8')):
+            body = {'error': '접속코드가 필요합니다'}
             try:
-                rl.rl_hit(rkey, RL_WINDOW)
+                body['attemptsLeft'] = max(0, RL_MAX_FAILS - int(rl.rl_hit(rkey, RL_WINDOW)))
             except Exception:
                 pass
-            return _json(401, {'error': '접속코드가 필요합니다'})
+            return _json(401, body)
     if path == '/api/notams' or path.startswith('/api/notams/'):
         return _notams(method, path, body, notam_store)
     if path == '/api/places' or path.startswith('/api/places/'):

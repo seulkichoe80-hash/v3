@@ -102,3 +102,17 @@ class Origin(unittest.TestCase):
         self.assertEqual(req('PUT', '/api/notams/1', {'Host': 'internal', 'X-Forwarded-Host': 'app.example', 'Origin': 'https://app.example', 'X-Access-Code': '1234'}, body, store=s)[0], 200)
 
 if __name__ == '__main__': unittest.main()
+
+class AttemptsLeft(unittest.TestCase):
+    def test_attempts_left_counts_down(self):
+        s = MemoryStore()
+        for i in range(3):
+            st, h, b = req('GET', '/api/asos', {'X-Access-Code': 'bad'}, store=s)
+            self.assertEqual(st, 401); self.assertEqual(json.loads(b)['attemptsLeft'], RL_MAX_FAILS - 1 - i)
+        st, h, b = req('GET', '/api/asos', {'X-Access-Code': '1234'}, store=s)
+        self.assertEqual(st, 200)
+    def test_no_field_when_counter_unavailable(self):
+        class Boom(MemoryStore):
+            def rl_count(self, k): raise OSError('down')
+            def rl_hit(self, k, t): raise OSError('down')
+        self.assertNotIn('attemptsLeft', json.loads(req('GET', '/api/asos', {'X-Access-Code': 'bad'}, store=Boom())[2]))
