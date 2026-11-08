@@ -29,7 +29,7 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
     path_q = parse_qs(qs)
     if method == 'GET' and path == '/api/client-config':
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
-                           'serverLog': bool(log_path)})
+                           'serverLog': bool(log_path), 'notamShared': notam_store is not None})
     if access_code:
         given = _hdr(headers, 'X-Access-Code') or ''
         if not hmac.compare_digest(given.encode('utf-8'), access_code.encode('utf-8')):

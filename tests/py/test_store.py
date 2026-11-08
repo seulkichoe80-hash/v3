@@ -94,3 +94,8 @@ class TEnvPrefix(unittest.TestCase):
         s = store_from_env({'STORAGE_REST_API_URL': 'https://p.upstash.io', 'STORAGE_REST_API_TOKEN': 'tk', 'STORAGE_REST_API_READ_ONLY_TOKEN': 'ro'})
         self.assertIsInstance(s, UpstashStore); self.assertEqual(s.token, 'tk')
         self.assertIsNone(store_from_env({'STORAGE_REST_API_URL': 'https://p'}))   # 토큰 없으면 미연결
+
+class TClientConfigFlag(unittest.TestCase):
+    def test_flag(self):
+        self.assertTrue(json.loads(call('GET', '/api/client-config', store=MemoryStore())[2])['notamShared'])
+        self.assertFalse(json.loads(call('GET', '/api/client-config')[2])['notamShared'])
