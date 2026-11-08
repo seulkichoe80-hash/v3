@@ -156,22 +156,39 @@ class SigwxJson(unittest.TestCase):
         a = P.parse_sigwx(__import__('json').dumps(self.ITEMS), issued='2026110805')
         self.assertEqual(a[0]['issued'], '2026-11-08T05:00:00Z')
 
-class SigwxXml(unittest.TestCase):
-    """실제 응답 형식(2026-11-09 확인): <odmap_ml><low><list_item><item item_type contour_name item_name label … is_close …>"""
-    def test_geo_points(self):
-        a = P.parse_sigwx(fx('sigwx_xml_geo.xml'), issued='2026110817')
-        kinds = [x['kind'] for x in a]; self.assertEqual(kinds, ['FZL', 'ICE', 'TURB'])
-        ice = a[1]; self.assertEqual(len(ice['points']), 4); self.assertTrue(ice['geo']); self.assertAlmostEqual(ice['points'][1]['lon'], 127.2)
-        turb = a[2]; self.assertEqual(len(turb['points']), 3); self.assertAlmostEqual(turb['points'][0]['lat'], 35.0)   # x,y(경도,위도) 순서도 범위로 구분
-        self.assertEqual(a[0]['fzlFt'], 5000); self.assertEqual(a[1]['issued'], '2026-11-08T17:00:00Z')
-    def test_pixel_coordinates_are_not_geo(self):
-        a = P.parse_sigwx(fx('sigwx_xml_pixel.xml'), issued='2026110817')
-        self.assertEqual([x['kind'] for x in a], ['FZL', 'ICE', 'TURB'])
-        for x in a: self.assertEqual(x['points'], []); self.assertFalse(x['geo'])             # 위경도로 해석 불가 → 위치 없음으로 표시
-        self.assertEqual(a[0]['fzlFt'], 5000)
-    def test_summary_text(self):
-        t = P.summarize_sigwx(fx('sigwx_xml_geo.xml'))
-        for k in ('odmap_ml', 'item', 'freezing_level', 'icing', 'turbulence', 'pt'): self.assertIn(k, t)
-        self.assertNotIn('authKey', t)
-    def test_malformed_xml(self):
-        self.assertEqual(P.parse_sigwx('<odmap_ml><low><item label="x"'), []); self.assertIn('해석', P.summarize_sigwx('<odmap_ml><low><item'))
+class SigwxReal(unittest.TestCase):
+    """실제 응답(2026-11-09): 위치는 <list_pt>의 웹지도(EPSG:3857, 좌상단 원점) 투영 좌표. <list_pt_fpv>는 화면 픽셀이라 쓰지 않는다."""
+    def setUp(self): self.a = P.parse_sigwx(fx('sigwx_real.xml'), issued='2026110817')
+    def test_kinds_layers_closed(self):
+        k = [(x['kind'], x['layer'], x['closed']) for x in self.a]
+        self.assertEqual(k, [('FZL', 'low', False), ('FZL', 'low', False), ('WIND', 'low', True), ('WIND', 'low', False),
+                             ('ICE', 'low', True), ('ICE', 'low', False), ('ICE', 'low', True), ('ICE', 'low', False),
+                             ('TURB', 'mid', True), ('TURB', 'mid', False)])
+    def test_mercator_conversion(self):
+        ice = self.a[4]; self.assertEqual(len(ice['points']), 8)            # list_pt만(픽셀 fpv 3점은 쓰지 않음)
+        self.assertAlmostEqual(ice['points'][0]['lat'], 39.954, places=2); self.assertAlmostEqual(ice['points'][0]['lon'], 128.221, places=2)
+        fz = self.a[0]; self.assertAlmostEqual(fz['points'][0]['lat'], 38.098, places=2); self.assertAlmostEqual(fz['points'][0]['lon'], 135.039, places=2)
+        self.assertAlmostEqual(fz['points'][-1]['lon'], 120.98, places=2)
+        for x in self.a:
+            for p in x['points']: self.assertTrue(20 <= p['lat'] <= 45 and 115 <= p['lon'] <= 140, p)
+    def test_freezing_level(self):
+        self.assertEqual([x.get('fzlFt') for x in self.a[:2]], [5000, 10000])
+    def test_altitude_from_icon_label(self):
+        self.assertEqual(self.a[4]['alt']['baseFt'], 6000); self.assertIsNone(self.a[4]['alt']['topFt']); self.assertEqual(self.a[4]['alt']['text'], 'FL060 이상')
+        self.assertEqual(self.a[6]['alt']['baseFt'], 8000); self.assertEqual(self.a[6]['alt']['text'], 'FL080 이상')
+        self.assertEqual(self.a[8]['alt']['text'], 'FL120 이상')
+    def test_issued_and_summary(self):
+        self.assertEqual(self.a[4]['issued'], '2026-11-08T17:00:00Z')
+        t = P.summarize_sigwx(fx('sigwx_real.xml'))
+        for k in ('low', 'mid', 'icing_sfip', 'ktg', 'sfc_wind', '위도', '경도'): self.assertIn(k, t)
+
+class SigwxGuards(unittest.TestCase):
+    def test_malformed_and_non_xml(self):
+        self.assertEqual(P.parse_sigwx('<odmap_ml><low><item label="x"'), [])
+        self.assertIn('해석', P.summarize_sigwx('<odmap_ml><low><item')); self.assertIn('XML 아님', P.summarize_sigwx('hello'))
+    def test_pixel_only_points_are_not_geographic(self):
+        x = '<odmap_ml><low><list_item><item item_type="4" contour_name="icing_sfip" item_name="icing" label="" is_close="true"><list_pt><pt x="210.3" y="120.4"/><pt x="300.9" y="118.2"/><pt x="305.0" y="200.7"/></list_pt></item></list_item></low></odmap_ml>'
+        a = P.parse_sigwx(x); self.assertEqual(len(a), 1); self.assertEqual(a[0]['points'], []); self.assertFalse(a[0]['geo'])
+    def test_fpv_pixels_never_used_even_if_they_look_like_latlon(self):
+        x = '<odmap_ml><low><list_item><item item_type="4" contour_name="icing_sfip" item_name="icing" label="" is_close="true"><fpv><list_pt_fpv><pt x="127.5" y="37.5"/><pt x="128.5" y="37.9"/><pt x="128.0" y="36.9"/></list_pt_fpv></fpv></item></list_item></low></odmap_ml>'
+        self.assertEqual(P.parse_sigwx(x)[0]['points'], [])

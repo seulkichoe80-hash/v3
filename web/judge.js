@@ -148,7 +148,7 @@ function lightningRow(items, route, input) {
   return { ...base, value: `${near.length}회 (최근접 ${Math.min(...near).toFixed(1)}km)`, grade: 'YELLOW', note: '뇌우 가능 — 경로 변경 검토(제21조②)' };
 }
 
-export const SIGWX_TEXT = { ICE: '착빙', TURB: '난류', MTN: '산악차폐', VIS: '저시정', TS: '뇌우·적란운', CLD: '낮은 구름', FZL: '결빙고도', ETC: '기타 위험기상' };
+export const SIGWX_TEXT = { ICE: '착빙', TURB: '난류', MTN: '산악차폐', VIS: '저시정', TS: '뇌우·적란운', CLD: '낮은 구름', WIND: '지상풍 구역', FZL: '0℃ 고도선', ETC: '기타 위험기상' };
 
 function sigwxRow(items, route, input) {
   const base = { segment: '경로', item: '저고도 중요기상', limit: '경로 위험구역 없음', source: '기상청 저고도 SIGWX', obsTime: null };
@@ -156,10 +156,10 @@ function sigwxRow(items, route, input) {
   if (st === 'error' || st === 'stale') return { ...base, value: '-', grade: 'NA', note: '저고도 SIGWX 수신 실패 — 항공기상청 직접 확인' };
   if (!items || !items.length) return { ...base, value: '-', grade: 'NA', note: '저고도 SIGWX 해석 불가 또는 자료 없음 — 원문 확인' };
   const issued = items.map((x) => x.issued).filter(Boolean).sort().pop() || null;
-  const fzl = items.find((x) => x.kind === 'FZL' && x.fzlFt);
-  const fzlText = fzl ? ` · 0℃ 고도 약 ${fzl.fzlFt}ft` : '';
-  // 위험구역: 착빙·난류 등. 닫힌 도형이 아닌 선(전선·제트기류 등)은 구역이 아니므로 제외한다.
-  const isHazard = (x) => ['ICE', 'TURB', 'MTN', 'VIS', 'TS', 'CLD'].includes(x.kind) || (x.kind === 'ETC' && x.closed !== false);
+  const fzls = [...new Set(items.filter((x) => x.kind === 'FZL' && x.fzlFt).map((x) => x.fzlFt))].sort((p, q) => p - q);
+  const fzlText = fzls.length ? ` · 0℃ 고도선 ${fzls.map((v) => v + 'ft').join('·')}` : '';
+  // 위험구역 = 닫힌 도형(구역). 선·아이콘(전선, 0℃선, 기호)은 구역이 아니고, 헬기가 비행하지 않는 중·고층(mid, high) 구역은 제외한다.
+  const isHazard = (x) => x.kind !== 'FZL' && x.closed !== false && (!x.layer || x.layer === 'low');
   const hazards = items.filter(isHazard);
   const checkable = hazards.filter((x) => (x.points || []).length >= 3);
   const unlocated = hazards.filter((x) => (x.points || []).length < 3);
@@ -167,8 +167,10 @@ function sigwxRow(items, route, input) {
   const kinds = (list) => { const c = {}; list.forEach((x) => { const t = SIGWX_TEXT[x.kind] || x.kind; c[t] = (c[t] || 0) + 1; }); return Object.entries(c).map(([k, v]) => `${k} ${v}`).join('·'); };
   if (hits.length) {
     const names = [...new Set(hits.map((x) => SIGWX_TEXT[x.kind] || x.kind))];
-    return { ...base, value: `경로 통과: ${names.join('·')}${fzlText}`, grade: 'YELLOW', obsTime: issued,
-      note: hits.some((x) => x.kind === 'ICE') ? '착빙 예상 구역 — 회피 검토(제21조④)' : hits.some((x) => x.kind === 'TURB') ? '난류 예상 구역 — 조종사 판단(제21조⑥)' : '저고도 위험기상 구역 — 경로 검토' };
+    const alts = [...new Set(hits.map((x) => x.alt && x.alt.text).filter(Boolean))];
+    const altNote = alts.length ? ` (구역 고도 ${alts.join(', ')} — 비행고도가 이보다 낮으면 해당 없음)` : '';
+    const lead = hits.some((x) => x.kind === 'ICE') ? '착빙 예상 구역 — 회피 검토(제21조④)' : hits.some((x) => x.kind === 'TURB') ? '난류 예상 구역 — 조종사 판단(제21조⑥)' : '저고도 위험기상 구역 — 경로 검토';
+    return { ...base, value: `경로 통과: ${names.join('·')}${fzlText}`, grade: 'YELLOW', obsTime: issued, note: lead + altNote };
   }
   if (unlocated.length) {
     return { ...base, value: `발표 ${hazards.length}건(${kinds(hazards)})${fzlText}`, grade: 'NA', obsTime: issued,

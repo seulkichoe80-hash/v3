@@ -634,8 +634,8 @@ function drawMap(result, data, pts) {
       add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 2, strokeColor: '#7a3fb0', strokeOpacity: 0.9, fillColor: '#7a3fb0', fillOpacity: 0.12 }));
       b.extend(ll(n.center));
     }
-    const SIG_COLOR = { ICE: '#1f77d0', TURB: '#c4231a', MTN: '#7a5a2a', VIS: '#6b7280', TS: '#b100c4', CLD: '#4b6b8a', ETC: '#555' };
-    for (const z of (data.sigwx || []).filter((z) => z.kind !== 'FZL' && z.points.length >= 3)) {
+    const SIG_COLOR = { ICE: '#1f77d0', TURB: '#c4231a', MTN: '#7a5a2a', VIS: '#2e9e5b', TS: '#b100c4', CLD: '#4b6b8a', WIND: '#3b4cc0', ETC: '#555' };
+    for (const z of (data.sigwx || []).filter((z) => z.kind !== 'FZL' && z.closed !== false && (!z.layer || z.layer === 'low') && z.points.length >= 3)) {
       const c = SIG_COLOR[z.kind] || '#555';
       add(new k.Polygon({ path: z.points.map(ll), strokeWeight: 2, strokeColor: c, strokeOpacity: 0.8, strokeStyle: 'dash', fillColor: c, fillOpacity: 0.08 }));
     }

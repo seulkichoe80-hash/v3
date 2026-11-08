@@ -41,7 +41,7 @@ _MOCK_STATE = {}
 def mock_fetch(url, timeout=5):
     """--mock 및 테스트용: URL에 따라 픽스처 반환."""
     table = [('inf=SFC', 'stn_sfc.txt'), ('inf=AWS', 'stn_aws.txt'), ('kma_sfctm2', 'asos.txt'),
-             ('wrn_now', 'warn.txt'), ('lgt_pnt', 'lgt.txt'), ('amo_sigwx', 'sigwx_rows.txt'), ('getMetar', 'metar.json'), ('getTaf', 'taf.json')]
+             ('wrn_now', 'warn.txt'), ('lgt_pnt', 'lgt.txt'), ('amo_sigwx', 'sigwx_real.xml'), ('getMetar', 'metar.json'), ('getTaf', 'taf.json')]
     if 'nph-aws2_min' in url:  # 클라이언트는 현재 → 10분 전 순으로 호출한다
         tm2 = url.split('tm2=')[1][:12]
         name = 'aws_10ago.txt' if _MOCK_STATE.get('aws_tm2', '') > tm2 else 'aws.txt'

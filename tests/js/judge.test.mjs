@@ -272,3 +272,21 @@ test('SIGWX: 위치 있는 요소는 교차 판정, 위치 없는 위험 요소�
   assert.equal(sigRow([far, { kind: 'TURB', label: 'TURB', points: [], geo: false }]).grade, 'NA');
   assert.equal(sigRow([{ kind: 'FZL', label: '0°C:050', points: [], geo: false, fzlFt: 5000 }]).grade, 'GREEN');   // 위험구역 발표 없음(0℃ 고도만)
 });
+// ---- 저고도 SIGWX: 실제 응답 구조(층·아이콘·고도·여러 0℃선) ----
+const poly = (k, o = {}) => ({ kind: k, label: k, layer: 'low', closed: true, geo: true, points: [{ lat: 37.50, lon: 126.85 }, { lat: 37.62, lon: 126.85 }, { lat: 37.62, lon: 126.95 }, { lat: 37.50, lon: 126.95 }], ...o });
+test('SIGWX: 고도 정보가 있으면 안내문에 붙는다', () => {
+  const r = sigRow([poly('ICE', { alt: { baseFt: 6000, topFt: null, text: 'FL060 이상' } })]);
+  assert.equal(r.grade, 'YELLOW'); assert.match(r.note, /FL060 이상/); assert.match(r.note, /비행고도/);
+});
+test('SIGWX: 아이콘·선(닫히지 않은 요소)과 중층(mid) 구역은 위험구역으로 세지 않는다', () => {
+  const icon = poly('ICE', { closed: false, points: [{ lat: 37.5, lon: 126.9 }, { lat: 37.6, lon: 126.9 }] });
+  const mid = poly('TURB', { layer: 'mid' });
+  const far = poly('ICE', { points: [{ lat: 36, lon: 126 }, { lat: 36, lon: 127 }, { lat: 35.5, lon: 127 }] });
+  const r = sigRow([icon, mid, far]);
+  assert.equal(r.grade, 'GREEN', JSON.stringify(r));                          // 경로를 지나는 mid 난류·아이콘은 무시, 멀리 있는 low 착빙만 해당
+  assert.equal(sigRow([mid]).grade, 'GREEN'); assert.match(sigRow([mid]).value, /위험구역 발표 없음/);
+});
+test('SIGWX: 저시정·지상풍 구역도 경로를 지나면 주의, 0℃ 고도선은 여러 개를 모두 안내', () => {
+  const r = sigRow([poly('VIS'), poly('WIND'), { kind: 'FZL', label: '0℃:050', layer: 'low', closed: false, points: [], fzlFt: 5000 }, { kind: 'FZL', label: '0℃:100', layer: 'low', closed: false, points: [], fzlFt: 10000 }]);
+  assert.equal(r.grade, 'YELLOW'); assert.match(r.value, /저시정/); assert.match(r.value, /지상풍/); assert.match(r.value, /5000ft·10000ft/);
+});

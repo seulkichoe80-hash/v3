@@ -1,4 +1,5 @@
 """기상청 API허브 응답 파서. 어떤 파서도 예외를 밖으로 던지지 않는다(해석 불가 행은 건너뜀)."""
+import math
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -456,8 +457,9 @@ def parse_taf_iwxxm(xml, airports):
 # ---------------- 저고도 중요기상예보(SIGWX) ----------------
 # 공공데이터포털 설명: "요소 종류, 요소 이름, 위경도값". 실제 컬럼 순서를 확인하기 전이라
 # 행에서 한반도 범위 위·경도 쌍과 글자(종류·이름)를 찾아 같은 요소끼리 묶는 방식으로 해석한다.
-SIGWX_KIND = [('ICE', ('ICE', 'ICING', '착빙')), ('TURB', ('TURB', '난류', '난기류')),
-              ('MTN', ('MT OBSC', 'MTW', 'MOUNTAIN', '산악')), ('VIS', ('VIS', '시정', 'FG', 'BR', '안개', 'HZ')),
+SIGWX_KIND = [('ICE', ('ICE', 'ICING', '착빙')), ('TURB', ('TURB', 'KTG', 'TABUL', '난류', '난기류')),
+              ('MTN', ('MT OBSC', 'MTW', 'MOUNTAIN', '산악')),
+              ('WIND', ('SFC_WIND', 'WIND_STRONG', 'L_WIND', '지상풍')), ('VIS', ('SFC_VIS', 'VIS', '시정', 'FG', 'BR', '안개', 'HZ')),
               ('TS', ('CB', 'TS', '뇌우', '적란운')), ('CLD', ('CLD', 'BKN', 'OVC', '구름')),
               ('FZL', ('FZLVL', 'FRZ', 'FREEZING', '결빙고도', '0°C', '0℃', '0도'))]
 
@@ -544,32 +546,86 @@ def _walk_sigwx(o, found):
             _walk_sigwx(v, found)
 
 
-def _xml_point_values(el):
-    """item 안에서 위치 값을 모은다: pt 속성, <pt>/<point> 등의 텍스트·x/y(lat/lon) 속성."""
-    vals = []
-    if el.attrib.get('pt'):
-        vals.append(el.attrib['pt'])
-    for d in el.iter():
-        if d is el:
+_MERC_R = 6378137.0
+_MERC_O = 20037508.342789244      # 웹지도(EPSG:3857) 세계 범위의 절반(m)
+
+
+def _merc_to_latlon(x, y):
+    """기상청 SIGWX <list_pt>의 투영 좌표 → (위도, 경도). 웹지도 미터 좌표를 좌상단 원점(오른쪽 +x, 아래쪽 +y)으로 옮긴 값이다.
+    실제 응답으로 화면 모서리가 위도 39.0/27.5, 경도 121.0/135.0으로 정확히 계산됨을 확인했다(2026-11-09)."""
+    lon = math.degrees((x - _MERC_O) / _MERC_R)
+    lat = math.degrees(2 * math.atan(math.exp((_MERC_O - y) / _MERC_R)) - math.pi / 2)
+    return lat, lon
+
+
+def _xml_walk(node):
+    """하위 요소를 돌되, 화면 그림용 <fpv> 안(픽셀 좌표)은 건너뛴다."""
+    for c in node:
+        if _ln(c.tag).lower() in ('fpv', 'list_pt_fpv'):
             continue
-        if _ln(d.tag).lower() in ('pt', 'point', 'p', 'pos', 'position', 'coord', 'latlon', 'lonlat'):
-            a = {k.lower(): v for k, v in d.attrib.items()}
-            la, lo = a.get('lat') or a.get('y'), a.get('lon') or a.get('lng') or a.get('x')
-            txt = (d.text or '').strip()
+        yield c
+        yield from _xml_walk(c)
+
+
+def _xml_points(el):
+    """item의 위치를 [{lat,lon}]으로. 투영 좌표(큰 숫자)는 변환하고, 위경도 값은 그대로 쓴다. 한반도 주변(위도 15~55, 경도 100~160)이 아니면 버린다."""
+    out, plain = [], []
+    if el.attrib.get('pt'):
+        plain.append(el.attrib['pt'])
+    for d in _xml_walk(el):
+        if _ln(d.tag).lower() not in ('pt', 'point', 'p', 'pos', 'position', 'coord', 'latlon', 'lonlat'):
+            continue
+        a = {k.lower(): v for k, v in d.attrib.items()}
+        la, lo = a.get('lat') or a.get('y'), a.get('lon') or a.get('lng') or a.get('x')
+        txt = (d.text or '').strip()
+        try:
             if la is not None and lo is not None:
-                try:
-                    vals.append([float(la), float(lo)])
-                except ValueError:
-                    pass
+                fx, fy = float(lo), float(la)                     # x=경도 쪽, y=위도 쪽
+                if abs(fx) > 1e6 and abs(fy) > 1e6:               # 투영 좌표
+                    lat, lon = _merc_to_latlon(fx, fy)
+                    if 15 <= lat <= 55 and 100 <= lon <= 160:
+                        out.append({'lat': lat, 'lon': lon})
+                else:
+                    plain.append([float(la), float(lo)])
             elif txt:
-                vals.append(txt)
+                plain.append(txt)
             elif a:
-                vals.append(' '.join(a.values()))
-    return vals
+                plain.append(' '.join(a.values()))
+        except ValueError:
+            continue
+    return out + _latlon_pairs(plain)
 
 
 def _xml_items(root):
     return [e for e in root.iter() if _ln(e.tag) == 'item' and any(k in e.attrib for k in ('item_type', 'contour_name', 'label', 'item_name'))]
+
+
+def _alt_from_label(label):
+    """아이콘 라벨 "XXX\n060" → 위쪽(상한)/아래쪽(하한) 고도. XXX는 차트 범위 밖(제한 없음). 값은 FL(백 피트 단위)."""
+    parts = [t for t in re.split(r'\s+', str(label or '').strip()) if t]
+    if len(parts) != 2:
+        return None
+    def fl(t):
+        return int(t) * 100 if re.fullmatch(r'\d{3}', t) else None
+    top, base = fl(parts[0]), fl(parts[1])
+    if top is None and base is None:
+        return None
+    if base is not None and top is None:
+        text = f'FL{base // 100:03d} 이상'
+    elif top is not None and base is None:
+        text = f'FL{top // 100:03d} 이하'
+    else:
+        text = f'FL{base // 100:03d}~FL{top // 100:03d}'
+    return {'baseFt': base, 'topFt': top, 'text': text}
+
+
+def _inside(lat, lon, poly):
+    c = False
+    for i in range(len(poly)):
+        a, b = poly[i], poly[i - 1]
+        if (a['lat'] > lat) != (b['lat'] > lat) and lon < (b['lon'] - a['lon']) * (lat - a['lat']) / (b['lat'] - a['lat']) + a['lon']:
+            c = not c
+    return c
 
 
 def _parse_sigwx_xml(src, iso_issued):
@@ -577,51 +633,69 @@ def _parse_sigwx_xml(src, iso_issued):
         root = _ET.fromstring(src)
     except _ET.ParseError:
         return []
+    parent = {c: p for p in root.iter() for c in p}
+    def layer_of(e):
+        while e in parent:
+            e = parent[e]
+            if _ln(e.tag).lower() in ('low', 'mid', 'high'):
+                return _ln(e.tag).lower()
+        return None
     out = []
     for e in _xml_items(root):
         a = e.attrib
-        label = ' '.join(str(a.get(k) or '') for k in ('item_name', 'label')).strip()
         name = str(a.get('contour_name') or '')
-        kind = _sigwx_kind(f"{name} {label} {a.get('item_type') or ''}" if not label and not name else f"{name} {label}")
-        pts = _latlon_pairs(_xml_point_values(e))
-        it = {'kind': kind, 'label': (label or name or '기타'), 'issued': iso_issued, 'points': pts, 'geo': bool(pts),
-              'closed': str(a.get('is_close', 'true')).lower() in ('true', '1')}
+        label = ' '.join(str(a.get(k) or '') for k in ('item_name', 'label')).strip()
+        kind = _sigwx_kind(f"{name} {label}")
+        pts = _xml_points(e)
+        it = {'kind': kind, 'label': (label or name or '기타'), 'contour': name, 'layer': layer_of(e), 'issued': iso_issued, 'points': pts,
+              'geo': bool(pts), 'closed': str(a.get('is_close', 'true')).lower() in ('true', '1'), 'icon': str(a.get('item_type')) == '7',
+              '_rawlabel': str(a.get('label') or '')}
         if kind == 'FZL':
             m = re.search(r'0\s*[°º℃]\s*C?\s*[:：]?\s*(\d{3})', label)
             if m:
                 it['fzlFt'] = int(m.group(1)) * 100
         out.append(it)
+    # 고도 정보: 구역 안에 놓인 아이콘(같은 그림 종류·같은 층)의 라벨 "XXX\n060"에서 읽는다
+    icons = [x for x in out if not x['closed'] and x['points'] and _alt_from_label(x['_rawlabel'])]
+    for x in out:
+        if x['closed'] and len(x['points']) >= 3 and x['kind'] not in ('FZL',):
+            for ic in icons:
+                if ic['contour'] == x['contour'] and ic['layer'] == x['layer'] and _inside(ic['points'][0]['lat'], ic['points'][0]['lon'], x['points']):
+                    x['alt'] = _alt_from_label(ic['_rawlabel'])
+                    break
+    for x in out:
+        x.pop('_rawlabel', None)
     return out
 
 
 def summarize_sigwx(text):
-    """형식 확인용 요약(점검 화면): 태그·속성·값 모양을 한 화면에 보이도록 압축한다."""
+    """형식 확인용 요약(점검 화면): 층·종류별 개수와 위경도 변환 범위를 한 화면에 보이도록 압축한다."""
     from collections import Counter
     src = str(text or '').strip()
     if not src.startswith('<'):
         return '해석할 수 없는 형식입니다(XML 아님). 앞부분:\n' + src[:600]
+    items = _parse_sigwx_xml(src, None)
     try:
         root = _ET.fromstring(src)
     except _ET.ParseError as e:
         return f'XML을 해석할 수 없습니다({e}). 앞부분:\n' + src[:600]
-    tags = Counter(_ln(e.tag) for e in root.iter())
-    lines = ['[구조 요약]', f'루트: {_ln(root.tag)} ' + ' '.join(f'{k}={v}' for k, v in list(root.attrib.items())[:12]),
-             '태그 수: ' + ', '.join(f'{k}×{v}' for k, v in tags.items())]
-    items = _xml_items(root)
-    groups = Counter((i.attrib.get('item_type', ''), i.attrib.get('contour_name', ''), i.attrib.get('item_name', ''), i.attrib.get('label', '')) for i in items)
-    lines.append(f'item {len(items)}건 (종류 {len(groups)}):')
-    for (t, c, n, l), k in list(groups.items())[:25]:
-        lines.append(f'  type={t} contour={c} name={n} label={l} ×{k}')
-    if items:
-        first = items[0]
-        lines.append('첫 item 속성: ' + ' '.join(f'{k}="{v}"' for k, v in first.attrib.items())[:500])
-        kids = list(first.iter())[1:4]
-        for k in kids:
-            lines.append(f'  하위 <{_ln(k.tag)}> 속성={dict(list(k.attrib.items())[:6])} 글자={(k.text or "").strip()[:80]!r}')
-        if not kids:
-            lines.append('  (첫 item에 하위 요소 없음)')
-    geo = sum(len(_latlon_pairs(_xml_point_values(i))) for i in items)
-    lines.append(f'위경도(한반도 범위)로 읽힌 위치 값: {geo}개 / item {len(items)}건 → ' + ('지도 좌표(경위도)' if geo else '경위도 아님(화면 좌표 등)'))
+    lines = ['[구조 요약]', f'루트: {_ln(root.tag)} ' + ' '.join(f'{k}={v}' for k, v in list(root.attrib.items())[:8]),
+             f'item {len(items)}건']
+    cnt = Counter((x['layer'] or '-', x['contour'], x['kind'], '구역' if x['closed'] else '선·아이콘') for x in items)
+    for (ly, c, k, shape), n in sorted(cnt.items()):
+        lines.append(f'  {ly:>3} | {c} | {k} | {shape} ×{n}')
+    allp = [p for x in items for p in x['points']]
+    if allp:
+        lines.append('위경도로 변환된 위치: %d개 → 위도 %.2f~%.2f, 경도 %.2f~%.2f' % (len(allp), min(p['lat'] for p in allp), max(p['lat'] for p in allp),
+                                                                                    min(p['lon'] for p in allp), max(p['lon'] for p in allp)))
+    else:
+        lines.append('위경도로 변환된 위치: 0개 (위치 형식을 확인해야 합니다)')
+    fz = sorted({x['fzlFt'] for x in items if x.get('fzlFt')})
+    if fz:
+        lines.append('0℃ 고도선: ' + ', '.join(f'{v}ft' for v in fz))
+    alts = [f"{x['kind']} {x['alt']['text']}" for x in items if x.get('alt')]
+    if alts:
+        lines.append('구역 고도: ' + ', '.join(alts[:8]))
     return '\n'.join(lines)
 
 

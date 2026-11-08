@@ -1,6 +1,0 @@
-<odmap_ml height_mode="LOW" amd_use="0" amd_hour="17" amd_min="00" fpv_safe_bound_width="632.09" fpv_safe_bound_height="622.81">
-<low><list_item>
-<item item_type="4" contour_name="freezing_level" item_name="" label="0°C:050" is_close="false"><pt x="120.5" y="300.2"/><pt x="480.1" y="310.8"/></item>
-<item item_type="2" contour_name="icing" item_name="MOD ICE" label="MOD ICE" is_close="true"><pt x="210.3" y="120.4"/><pt x="300.9" y="118.2"/><pt x="305.0" y="200.7"/><pt x="215.6" y="204.1"/></item>
-<item item_type="3" contour_name="turbulence" item_name="MOD TURB" label="MOD TURB" is_close="true"><pt x="400.0" y="400.0"/><pt x="450.0" y="410.0"/><pt x="430.0" y="460.0"/></item>
-</list_item></low></odmap_ml>
