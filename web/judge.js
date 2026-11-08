@@ -46,7 +46,7 @@ function nearest(items, p, maxKm) {
 const alongRoute = (items, route, maxKm) => items.filter((it) => has(it) && pointToRouteKm(it, route) <= maxKm);
 
 // 관측 하나가 '운고 정보'를 가지고 있는지(구름 적음 = 운고 없음과 결측을 구분)
-const hasCeilInfo = (o) => (o.ceilUnknown ? false : o.icao ? o.visM !== null && o.visM !== undefined : o.cloudTenths !== null && o.cloudTenths !== undefined);
+const hasCeilInfo = (o) => (o.ceilUnknown ? false : o.icao ? o.visM !== null && o.visM !== undefined : (o.cloudTenths !== null && o.cloudTenths !== undefined) || (o.midTenths !== null && o.midTenths !== undefined));
 const srcName = (o) => (o.icao ? `METAR ${o.name}(${o.icao})` : `ASOS ${o.name}(${o.stn})`);
 
 function obsRows(segment, obs, limits, input) {
@@ -74,8 +74,9 @@ function obsRows(segment, obs, limits, input) {
   else {
     const w = withCeil.reduce((a, b) => (b.ceilFt < a.ceilFt ? b : a));
     // ASOS는 전운량·중하층운량을 함께 보여 줘서 운고 산정 근거(상층운 포함 여부)를 확인할 수 있게 한다
-    const cloudNote = w.stn !== undefined && w.cloudTenths !== null && w.cloudTenths !== undefined
-      ? `ASOS 전운량 ${w.cloudTenths}/10${w.midTenths !== null && w.midTenths !== undefined ? ` · 중하층 ${w.midTenths}/10` : ''}` : '';
+    const has = (v) => v !== null && v !== undefined;
+    const cloudNote = w.stn !== undefined && (has(w.cloudTenths) || has(w.midTenths))
+      ? `ASOS ${has(w.cloudTenths) ? `전운량 ${w.cloudTenths}/10` : ''}${has(w.cloudTenths) && has(w.midTenths) ? ' · ' : ''}${has(w.midTenths) ? `중하층 ${w.midTenths}/10` : ''}` : '';
     rows.push(mk('운고', { value: `${w.ceilFt}ft`, grade: gradeValue(w.ceilFt, limits.ceilFt, f), source: srcName(w), obsTime: w.obsTime, note: cloudNote }));
   }
   return rows;

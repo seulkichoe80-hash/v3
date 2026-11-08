@@ -24,11 +24,16 @@ class T(unittest.TestCase):
         rows = {r['stn']: r for r in P.parse_asos(fx('asos.txt'), P.parse_stations(fx('stn_sfc.txt')))}
         s = rows['108']
         self.assertEqual(s['visM'], 1500); self.assertEqual(s['cloudTenths'], 7); self.assertEqual(s['midTenths'], 5)
-        self.assertEqual(s['ceilFt'], 2625); self.assertEqual(s['obsTime'], '2026-11-08T05:00:00Z')
+        self.assertIsNone(s['ceilFt']); self.assertEqual(s['obsTime'], '2026-11-08T05:00:00Z')      # 전운량 7/10이어도 중하층 5/10(<6) → 운고 없음
         self.assertEqual(s['name'], '서울'); self.assertIsNone(s['gustMs'])
         self.assertIsNone(rows['112']['ceilFt'])           # 전운량 3 → 운고 없음
         self.assertEqual(rows['112']['gustMs'], 12.4)
         self.assertIsNone(rows['119']['visM'])             # 결측 -9 → None (0 아님)
+        # 운고: 중하층 운량 6/10 이상일 때만 최저운고를 운고로 인정
+        self.assertEqual(rows['105']['ceilFt'], 2625); self.assertFalse(rows['105']['ceilUnknown'])          # 중하층 7/10, 최저 800m
+        self.assertIsNone(rows['133']['ceilFt']); self.assertFalse(rows['133']['ceilUnknown'])              # 전운량 9/10이지만 중하층 2/10(상층운 위주)
+        self.assertIsNone(rows['136']['ceilFt']); self.assertTrue(rows['136']['ceilUnknown'])               # 전운량 9/10인데 중하층 결측 → 자료없음
+        self.assertIsNone(rows['140']['ceilFt']); self.assertFalse(rows['140']['ceilUnknown'])              # 전운량 4/10 → 낮은 구름도 6/10 미만
 
     def test_aws(self):
         rows = {r['stn']: r for r in P.parse_aws(fx('aws.txt'), P.parse_stations(fx('stn_aws.txt')))}
@@ -76,9 +81,9 @@ if __name__ == '__main__': unittest.main()
 
 class Review(unittest.TestCase):
     def test_i1_asos_ceil_unknown(self):
-        line = fx('asos.txt').splitlines()[5].replace('  7   5    8 Sc', '  8   5   -9 Sc')
+        line = fx('asos.txt').splitlines()[5].replace('  7   5    8 Sc', '  8   7   -9 Sc')     # 중하층 7/10인데 최저운고 결측
         r = P.parse_asos('#\n' + line, {})[0]
-        self.assertEqual(r['cloudTenths'], 8); self.assertIsNone(r['ceilFt']); self.assertTrue(r['ceilUnknown'])
+        self.assertEqual(r['cloudTenths'], 8); self.assertEqual(r['midTenths'], 7); self.assertIsNone(r['ceilFt']); self.assertTrue(r['ceilUnknown'])
     def test_i1_metar_ceil_unknown(self):
         self.assertTrue(P.parse_metar('METAR RKSS 080500Z 32012KT 9999 BKN/// 12/10 Q1015=', AIRPORTS, NOW)['ceilUnknown'])
         self.assertTrue(P.parse_metar('METAR RKSS 080500Z 32012KT 9999 12/10 Q1015=', AIRPORTS, NOW)['ceilUnknown'])

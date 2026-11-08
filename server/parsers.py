@@ -89,11 +89,19 @@ def parse_asos(text, stations):
                 continue
             st = _st(stations, r['STN'])
             vs, ch, ca, cm = num(r['VS']), num(r['CH_MIN']), num(r['CA_TOT']), num(r['CA_MID'])
-            ceil = round(ch * 100 * FT_PER_M) if (ch is not None and ca is not None and ca >= 6) else None
+            # 운고 = 가장 낮은 구름층이 5/8 이상 덮인 경우의 높이(제2조 32호). 층별 자료가 없어 '중하층 운량 6/10 이상'일 때 최저운고를 운고로 근사한다.
+            # 중하층 운량이 결측이면 전운량이 6/10 미만일 때만 '운고 없음'으로 보고, 그 외에는 판단하지 않는다(자료없음).
+            if cm is not None:
+                low_cover = cm >= 6
+                undetermined = False
+            else:
+                low_cover = False
+                undetermined = ca is not None and ca >= 6
+            ceil = round(ch * 100 * FT_PER_M) if (low_cover and ch is not None) else None
             out.append({'stn': r['STN'], 'name': st['name'], 'lat': st['lat'], 'lon': st['lon'],
                         'obsTime': kst_to_iso(r['TM']), 'visM': None if vs is None else int(vs * 10),
                         'ceilFt': ceil, 'cloudTenths': None if ca is None else int(ca), 'midTenths': None if cm is None else int(cm),
-                        'ceilUnknown': ca is not None and ca >= 6 and ch is None,
+                        'ceilUnknown': undetermined or (low_cover and ch is None),
                         'windDir': num(r['WD']), 'windMs': num(r['WS']), 'gustMs': num(r['GST_WS'])})
         except (KeyError, ValueError, TypeError):
             continue

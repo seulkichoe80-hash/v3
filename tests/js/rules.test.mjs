@@ -13,7 +13,7 @@ test('판정 기준표: 규정 조문값과 시스템 설정값을 구분하고 
   for (const v of ['3200', '4800', '1000', '1500', '2000']) assert.ok(reg.includes(v), '규정표에 ' + v);
   assert.ok(reg.includes('제21조'));
   assert.ok(!reg.includes('1.5배'), '1.5배는 규정이 아님');
-  assert.ok(set.includes('1.5')); assert.ok(set.includes('90')); assert.ok(set.includes('20km')); assert.ok(set.includes('TEMPO'));
+  assert.ok(set.includes('중하층')); assert.ok(set.includes('1.5')); assert.ok(set.includes('90')); assert.ok(set.includes('20km')); assert.ok(set.includes('TEMPO'));
   // config를 바꾸면 표시도 바뀐다
   const c2 = JSON.parse(JSON.stringify(config)); c2.cautionFactor = undefined; c2.limits.cautionFactor = 1.3; c2.freshnessMin.metar = 60;
   const s2 = JSON.stringify(criteriaTable(c2).settings); assert.ok(s2.includes('1.3')); assert.ok(s2.includes('60'));

@@ -25,6 +25,7 @@ export function criteriaTable(config) {
     { label: '낙뢰', value: `최근 ${f.lightning}분, 경로 ${r.lightningKm}km 이내 → "주의"(경로 변경 검토)` },
     { label: 'NOTAM', value: `D 시리즈, 경로 통과 또는 ${r.notamNearNm}NM 이내 + 비행 시간대 발효 → "주의"` },
     { label: '기상특보 구분', value: '태풍·강풍·풍랑·대설·호우(주의보 이상)가 경로 시군구와 일치하면 "제한", 같은 시·도 또는 기타 특보는 "주의"' },
+    { label: '운고(ASOS)', value: '층별 구름 자료가 없어 "중하층 운량 6/10 이상"일 때 최저운고를 운고로 근사(규정은 가장 낮은 구름층이 5/8 이상일 때). 중하층 운량이 없고 전운량 6/10 이상이면 "자료없음"' },
     { label: '순항속도', value: `기본 ${config.cruiseKt}kt (입력 변경 가능)` },
   ];
   return { regulation: reg, settings: set };

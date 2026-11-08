@@ -234,3 +234,8 @@ test('METAR 운고 행에는 ASOS 구름 설명이 붙지 않음', () => {
   const row = r.rows.find((x) => x.segment === '목적지' && x.item === '운고');
   assert.ok(!/전운량/.test(row.note || ''));
 });
+test('ASOS 중하층 운량만 있고 전운량이 없어도 운고 정보로 인정', () => {
+  const r = evaluate(base({ isNight: true, data: { ...base().data, metar: [], asos: [asos({ cloudTenths: null, midTenths: 7, ceilFt: 1500 })] } }));
+  const row = r.rows.find((x) => x.segment === '목적지' && x.item === '운고');
+  assert.equal(row.grade, 'RED'); assert.match(row.note, /중하층 7\/10/);
+});
