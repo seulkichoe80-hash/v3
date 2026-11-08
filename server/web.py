@@ -11,8 +11,8 @@ SHARED_CACHE_SEC = {'sigwx': 600, 'metar': 180, 'taf': 300, 'asos': 180, 'aws': 
 JSON_T = 'application/json; charset=utf-8'
 
 # 'unsafe-eval'은 카카오맵 SDK가 내부에서 문자열 실행을 써서 필요(2026-11-08 실사이트 확인). 'unsafe-inline'은 스크립트에 허용하지 않는다.
-# 보안 헤더(vercel.json의 headers와 같아야 하며 시험으로 확인한다). CSP는 먼저 감시 모드(Report-Only)로 배포해 위반 여부를 확인한 뒤 강제 모드로 바꾼다.
-CSP_HEADER_NAME = 'Content-Security-Policy-Report-Only'
+# 보안 헤더(vercel.json의 headers와 같아야 하며 시험으로 확인한다). CSP는 감시 모드(Report-Only)로 실사이트 위반 0건을 확인한 뒤 강제 모드로 전환했다(2026-11-08).
+CSP_HEADER_NAME = 'Content-Security-Policy'
 CSP = ("default-src 'self'; "
        "script-src 'self' 'unsafe-eval' https://dapi.kakao.com https://t1.kakaocdn.net https://t1.daumcdn.net; "
        "style-src 'self' 'unsafe-inline'; "
