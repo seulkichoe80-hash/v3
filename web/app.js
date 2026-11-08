@@ -14,7 +14,7 @@ const kstStr = (d, withDate = false) => {
   return (withDate ? `${k.getUTCMonth() + 1}/${k.getUTCDate()} ` : '') + `${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
 };
 
-const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history', FMT_KEY = 'heliwx.coordfmt', NOTAM_KEY = 'heliwx.notams', MAX_VIA = 5, MAX_SLOTS = 10;
+const CODE_KEY = 'heliwx.code', HIST_KEY = 'heliwx.history', FMT_KEY = 'heliwx.coordfmt', NOTAM_KEY = 'heliwx.notams', COORD_ON_KEY = 'heliwx.coordOn', MAX_VIA = 5, MAX_SLOTS = 10;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 불가 환경 */ } },
@@ -61,6 +61,8 @@ async function init() {
   $('depart').value = kstInputNow();
   const fmt = store.get(FMT_KEY, 'dd'); $('coord-fmt').value = ['dd', 'ddm', 'dms'].includes(fmt) ? fmt : 'dd';
   $('coord-fmt').addEventListener('change', () => { store.set(FMT_KEY, $('coord-fmt').value); reformatAll(); });
+  setCoordsOn(store.get(COORD_ON_KEY, false), false);
+  $('coord-toggle').addEventListener('change', (e) => setCoordsOn(e.target.checked, true));
   $('add-via').addEventListener('click', addVia);
   $('notam-add').addEventListener('click', () => { if (state.slotCount < MAX_SLOTS) { state.slotCount++; renderSlots(); } });
   $('notam-reload').addEventListener('click', loadNotams);
@@ -82,7 +84,14 @@ const departUtc = () => {
 };
 
 // ---------- 카카오맵 ----------
+function setCoordsOn(on, remember) {
+  document.body.classList.toggle('coords-on', on);
+  $('coord-toggle').checked = on;
+  if (remember) store.set(COORD_ON_KEY, on);
+}
+
 function kakaoFailed(msg) {
+  setCoordsOn(true, false);   // 지도가 없으면 좌표 입력이 유일한 수단
   $('map-off').hidden = false;
   $('map-off').textContent = msg + ' — 각 지점의 좌표칸에 직접 입력하면 판단은 계속 가능합니다.';
 }
@@ -137,8 +146,9 @@ function renderPoints() {
     return `<fieldset class="place ${p.role}" data-i="${i}"><legend>${roleLabel(k)}</legend>${base}
       <div class="search"><input id="pt-${k}-q" type="search" placeholder="장소 검색" autocomplete="off"><ul class="results" id="pt-${k}-results"></ul></div>
       <div class="row"><input id="pt-${k}-name" placeholder="이름" value="${esc(p.name)}"></div>
-      <div class="row"><input id="pt-${k}-coord" placeholder="${esc(COORD_PLACEHOLDER[fmtNow()])}" value="${esc(p.text)}" spellcheck="false" aria-label="${roleLabel(k)} 좌표"></div>
-      <div class="coord-msg" id="pt-${k}-msg"></div>${tools}
+      <div class="loc" id="pt-${k}-loc">${Number.isFinite(p.lat) ? `위치 ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}` : '위치 미지정 — 장소 검색 또는 지도 클릭'}</div>
+      <div class="row coord-only"><input id="pt-${k}-coord" placeholder="${esc(COORD_PLACEHOLDER[fmtNow()])}" value="${esc(p.text)}" spellcheck="false" aria-label="${roleLabel(k)} 좌표"></div>
+      <div class="coord-msg coord-only" id="pt-${k}-msg"></div>${tools}
       <label class="inline"><input type="radio" name="clickset" value="${k}" ${state.clickTarget === k ? 'checked' : ''}> 지도 클릭 → 이 지점</label></fieldset>`;
   }).join('');
   state.points.forEach((p, i) => wirePoint(p, keys[i]));
@@ -159,6 +169,7 @@ function wirePoint(p, k) {
       msg.textContent = `→ ${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}${r.warning ? ' · ' + r.warning : ''}`;
       msg.className = 'coord-msg' + (r.warning ? ' warn' : '');
     }
+    $(`pt-${k}-loc`).textContent = Number.isFinite(p.lat) ? `위치 ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}` : '위치 미지정 — 장소 검색 또는 지도 클릭';
     updateAuto(); drawRouteOnly();
   };
   coord.addEventListener('change', apply);

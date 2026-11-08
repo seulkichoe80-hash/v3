@@ -25,6 +25,11 @@ await page.waitForFunction(() => /올바르지/.test(document.querySelector('#co
 await page.fill('#code-input', 'fire119'); await page.click('#code-ok');
 await page.waitForSelector('#code-gate[hidden]', { state: 'attached', timeout: 5000 }).catch(() => fail('맞는 코드로 통과 못함'));
 await page.waitForSelector('#map-off:not([hidden])', { timeout: 15000 }).catch(() => fail('지도 없음 안내가 보이지 않음'));
+// 좌표 입력: 기본 숨김이지만 지도가 없으면 자동으로 켜짐 → 끄면 숨겨지고 다시 켬
+if (!(await page.isChecked('#coord-toggle'))) fail('지도 없음인데 좌표 입력이 자동으로 켜지지 않음');
+await page.uncheck('#coord-toggle');
+if (await page.isVisible('#pt-from-coord') || await page.isVisible('#coord-fmt')) fail('좌표 입력을 끄면 숨겨져야 함');
+await page.check('#coord-toggle');
 // 도·분·초 형식으로 출발지, 십진수로 목적지, 경유지 1개(도·분) 추가
 await page.selectOption('#coord-fmt', 'dms');
 await page.fill('#pt-from-name', '김포'); await page.fill('#pt-from-coord', `37°33'30"N 126°47'26"E`); await page.dispatchEvent('#pt-from-coord', 'change');
@@ -32,6 +37,9 @@ if (!/37\.558/.test(await page.textContent('#pt-from-msg'))) fail('도분초 해
 await page.fill('#pt-from-coord', '37 33'); await page.dispatchEvent('#pt-from-coord', 'change');
 if (!/숫자 6개/.test(await page.textContent('#pt-from-msg'))) fail('좌표 형식 오류 안내 없음');
 await page.fill('#pt-from-coord', '373330N1264726E'); await page.dispatchEvent('#pt-from-coord', 'change');
+await page.uncheck('#coord-toggle');
+if (!/위치 37\.558/.test(await page.textContent('#pt-from-loc'))) fail('좌표 숨김 시 위치 요약 없음');
+await page.check('#coord-toggle');
 await page.click('#add-via');
 await page.selectOption('#coord-fmt', 'ddm');
 if (!/^37°33\.500'N/.test(await page.inputValue('#pt-from-coord'))) fail('형식 변경 시 좌표 재표시 안 됨: ' + await page.inputValue('#pt-from-coord'));

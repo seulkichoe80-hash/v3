@@ -32,7 +32,8 @@
   <section class="panel input" aria-labelledby="h-input">
     <h2 id="h-input">임무 입력</h2>
 
-    <label class="fmt">좌표 형식
+    <label class="inline toggle"><input type="checkbox" id="coord-toggle"> 좌표 직접 입력</label>
+    <label class="fmt coord-only">좌표 형식
       <select id="coord-fmt"><option value="dd">십진수 (37.5583, 126.7906)</option><option value="ddm">도·분 (37°33.498'N …)</option><option value="dms">도·분·초 (37°33'30"N …)</option></select>
     </label>
     <div id="points"></div>
