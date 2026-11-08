@@ -128,9 +128,9 @@ class KmaClient:
             return items
         raise KeyError(kind)
 
-    def raw(self, kind, limit=4000):
+    def raw(self, kind, limit=4000, icao='RKSS'):
         """점검용: 기상청 원본 응답 앞부분(인증키 가림)."""
-        url = self._url(kind, icao='RKSS')
+        url = self._url(kind, icao=icao if icao.isalnum() else 'RKSS')
         mask = (lambda s: s.replace(self.key, '****')) if self.key else (lambda s: s)
         try:
             body = self.fetch(url, timeout=self.timeout)

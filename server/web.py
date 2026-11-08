@@ -24,7 +24,9 @@ def _hdr(headers, name):
 
 def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None):
     """→ (status, headers, body bytes). access_code가 비어 있으면 접속코드 없이 개방."""
-    path = path.split('?')[0]
+    from urllib.parse import parse_qs
+    path, _, qs = path.partition('?')
+    path_q = parse_qs(qs)
     if method == 'GET' and path == '/api/client-config':
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
                            'serverLog': bool(log_path)})
@@ -36,7 +38,11 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
         from .kma import ENDPOINTS
         kind = path[len('/api/raw/'):]
         if kind in ENDPOINTS:
-            return _json(200, client.raw(kind))
+            try:
+                limit = max(100, min(200000, int(path_q.get('limit', ['4000'])[0])))
+            except ValueError:
+                limit = 4000
+            return _json(200, client.raw(kind, limit=limit, icao=path_q.get('icao', ['RKSS'])[0][:4]))
         return _json(404, {'error': 'unknown api'})
     if method == 'GET' and path.startswith('/api/'):
         kind = path[5:]
