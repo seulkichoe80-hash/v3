@@ -31,7 +31,7 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
                            'serverLog': bool(log_path), 'notamShared': notam_store is not None})
     if access_code:
-        given = _hdr(headers, 'X-Access-Code') or ''
+        given = _hdr(headers, 'X-Access-Code') or _hdr(headers, 'X-Access-Token') or ''
         if not hmac.compare_digest(given.encode('utf-8'), access_code.encode('utf-8')):
             return _json(401, {'error': '접속코드가 필요합니다'})
     if path == '/api/notams' or path.startswith('/api/notams/'):

@@ -55,3 +55,10 @@ class Raw(unittest.TestCase):
         self.assertEqual(call('GET', '/api/raw/warn', code='1234')[0], 401)
     def test_raw_unknown(self):
         self.assertEqual(call('GET', '/api/raw/zzz')[0], 404)
+
+class TokenAlias(unittest.TestCase):
+    def test_x_access_token_header(self):
+        self.assertEqual(call('GET', '/api/asos', {'X-Access-Token': '1234'}, code='1234')[0], 200)
+        self.assertEqual(call('GET', '/api/asos', {'X-Access-Token': 'nope'}, code='1234')[0], 401)
+    def test_sigwx_raw_endpoint_known(self):
+        self.assertNotEqual(call('GET', '/api/raw/sigwx')[0], 404)
