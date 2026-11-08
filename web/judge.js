@@ -73,7 +73,10 @@ function obsRows(segment, obs, limits, input) {
   else if (!withCeil.length) rows.push(mk('운고', { value: '운고 없음(구름 적음)', grade: 'GREEN', source: srcName(ci[0]), obsTime: ci[0].obsTime, note: '' }));
   else {
     const w = withCeil.reduce((a, b) => (b.ceilFt < a.ceilFt ? b : a));
-    rows.push(mk('운고', { value: `${w.ceilFt}ft`, grade: gradeValue(w.ceilFt, limits.ceilFt, f), source: srcName(w), obsTime: w.obsTime, note: '' }));
+    // ASOS는 전운량·중하층운량을 함께 보여 줘서 운고 산정 근거(상층운 포함 여부)를 확인할 수 있게 한다
+    const cloudNote = w.stn !== undefined && w.cloudTenths !== null && w.cloudTenths !== undefined
+      ? `ASOS 전운량 ${w.cloudTenths}/10${w.midTenths !== null && w.midTenths !== undefined ? ` · 중하층 ${w.midTenths}/10` : ''}` : '';
+    rows.push(mk('운고', { value: `${w.ceilFt}ft`, grade: gradeValue(w.ceilFt, limits.ceilFt, f), source: srcName(w), obsTime: w.obsTime, note: cloudNote }));
   }
   return rows;
 }

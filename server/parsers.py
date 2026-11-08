@@ -88,11 +88,11 @@ def parse_asos(text, stations):
             if not r['TM'].isdigit():
                 continue
             st = _st(stations, r['STN'])
-            vs, ch, ca = num(r['VS']), num(r['CH_MIN']), num(r['CA_TOT'])
+            vs, ch, ca, cm = num(r['VS']), num(r['CH_MIN']), num(r['CA_TOT']), num(r['CA_MID'])
             ceil = round(ch * 100 * FT_PER_M) if (ch is not None and ca is not None and ca >= 6) else None
             out.append({'stn': r['STN'], 'name': st['name'], 'lat': st['lat'], 'lon': st['lon'],
                         'obsTime': kst_to_iso(r['TM']), 'visM': None if vs is None else int(vs * 10),
-                        'ceilFt': ceil, 'cloudTenths': None if ca is None else int(ca),
+                        'ceilFt': ceil, 'cloudTenths': None if ca is None else int(ca), 'midTenths': None if cm is None else int(cm),
                         'ceilUnknown': ca is not None and ca >= 6 and ch is None,
                         'windDir': num(r['WD']), 'windMs': num(r['WS']), 'gustMs': num(r['GST_WS'])})
         except (KeyError, ValueError, TypeError):

@@ -223,3 +223,14 @@ test('보고문에 제22조 확인 안내(야간·해상일 때만)', () => {
   const night = evaluate(base({ isNight: true })).reportText; assert.match(night, /제22조① 야간 조건 확인/);
   const sea = evaluate(base({ isSea: true })).reportText; assert.match(sea, /제22조④ 해상 조건 확인/);
 });
+// ---- ASOS 운고 근거(전운량·중하층운량) 표시 ----
+test('ASOS 운고 행에 전운량·중하층운량을 보여 준다', () => {
+  const r = evaluate(base({ isNight: true, data: { ...base().data, metar: [], asos: [asos({ ceilFt: 1969, cloudTenths: 8, midTenths: 3 })] } }));   // 야간 육상 기준 2000ft
+  const row = r.rows.find((x) => x.segment === '목적지' && x.item === '운고');
+  assert.equal(row.grade, 'RED'); assert.match(row.note, /전운량 8\/10/); assert.match(row.note, /중하층 3\/10/);
+});
+test('METAR 운고 행에는 ASOS 구름 설명이 붙지 않음', () => {
+  const r = evaluate(base({ data: { ...base().data, asos: [] } }));
+  const row = r.rows.find((x) => x.segment === '목적지' && x.item === '운고');
+  assert.ok(!/전운량/.test(row.note || ''));
+});

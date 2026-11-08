@@ -23,7 +23,7 @@ class T(unittest.TestCase):
     def test_asos(self):
         rows = {r['stn']: r for r in P.parse_asos(fx('asos.txt'), P.parse_stations(fx('stn_sfc.txt')))}
         s = rows['108']
-        self.assertEqual(s['visM'], 1500); self.assertEqual(s['cloudTenths'], 7)
+        self.assertEqual(s['visM'], 1500); self.assertEqual(s['cloudTenths'], 7); self.assertEqual(s['midTenths'], 5)
         self.assertEqual(s['ceilFt'], 2625); self.assertEqual(s['obsTime'], '2026-11-08T05:00:00Z')
         self.assertEqual(s['name'], '서울'); self.assertIsNone(s['gustMs'])
         self.assertIsNone(rows['112']['ceilFt'])           # 전운량 3 → 운고 없음
