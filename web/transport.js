@@ -1,12 +1,12 @@
 // 출동 수단 비교: 헬기(접수→이륙 준비 + 비행) vs 구급차(도로 이동). 조언용이며 최종 판단은 통제관.
-export function compareTransport({ prepMin, flightMin, overall, road, closeMin = 5, ambPrepMin = 0 }) {
+export function compareTransport({ prepMin, flightMin, overall, road, closeMin = 5, ambPrepMin = 0, missing = '' }) {
   const heli = { prepMin, flightMin, totalMin: prepMin + flightMin };
   const amb = road && Number.isFinite(road.durationMin) ? { prepMin: ambPrepMin, roadMin: road.durationMin, totalMin: ambPrepMin + road.durationMin, distanceKm: road.distanceKm, source: road.source, note: road.note || '' } : null;
   const out = { heli, amb, diffMin: amb ? amb.totalMin - heli.totalMin : null, verdict: 'NONE', text: '', caution: [] };
   if (overall === 'RED') {
     out.verdict = 'AMBULANCE'; out.text = '헬기는 규정상 비행제한 — 구급차 이송 우선 검토 (제21조)';
   } else if (!amb) {
-    out.verdict = 'NONE'; out.text = '구급차 이동시간을 구하지 못해 비교 불가 — 헬기 소요시간만 참고';
+    out.verdict = 'NONE'; out.text = missing || '구급차 이동시간을 구하지 못해 비교 불가 — 헬기 소요시간만 참고';
   } else if (out.diffMin >= closeMin) {
     out.verdict = 'HELI'; out.text = `헬기가 약 ${out.diffMin}분 빠름`;
   } else if (out.diffMin <= -closeMin) {

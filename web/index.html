@@ -40,6 +40,17 @@
     </label>
     <div id="points"></div>
     <button id="add-via" type="button" class="ghost">+ 경유지 추가</button>
+    <fieldset class="amb" id="amb-box">
+      <legend>🚑 구급차 이동시간 <small>(현장 → 병원 · 헬기와 비교용)</small></legend>
+      <div class="amb-line">
+        <div class="search"><input id="amb-from-q" type="search" placeholder="현장 (비우면 경유지 1)" autocomplete="off" aria-label="구급차 출발지(현장)"><ul class="results" id="amb-from-results"></ul></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="search"><input id="amb-to-q" type="search" placeholder="병원 (비우면 목적지)" autocomplete="off" aria-label="구급차 목적지(병원)"><ul class="results" id="amb-to-results"></ul></div>
+        <button type="button" id="amb-clear" class="mini" title="자동값으로 되돌리기">초기화</button>
+      </div>
+      <div class="loc" id="amb-loc"></div>
+      <p class="hint">헬기는 위 경로(항공대 → 현장 → 병원)로, 구급차는 이 칸의 현장 → 병원으로 비교합니다. 검색·★주요지점·좌표 직접 입력 가능.</p>
+    </fieldset>
     <details id="places-box" class="places">
       <summary id="places-sum">★ 주요지점 <small id="places-count"></small></summary>
       <input id="place-q" type="search" placeholder="주요지점 검색 (이름·메모)" autocomplete="off">

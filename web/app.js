@@ -78,6 +78,7 @@ async function init() {
   $('sigwx-help-btn').addEventListener('click', () => loadSigwxRaw('help'));
   showHistoryCount();
   $('usage-csv').addEventListener('click', downloadUsage);
+  wireAmb();
   refreshUsage();
   $('cruise').value = cc.config.cruiseKt; $('prep').value = (cc.config.dispatch || {}).heliPrepMin ?? 15;
   $('depart').value = kstInputNow();
@@ -161,7 +162,7 @@ const fmtNow = () => $('coord-fmt').value;
 function pointKeys() {
   let v = 0; return state.points.map((p) => (p.role === 'via' ? `via${++v}` : p.role));
 }
-const roleLabel = (key) => (key === 'from' ? '출발지' : key === 'to' ? '목적지(현장)' : `경유지 ${key.slice(3)}`);
+const roleLabel = (key) => (key === 'from' ? '출발지(119항공대)' : key === 'to' ? '목적지(병원)' : `경유지 ${key.slice(3)}(현장 등)`);
 
 function renderPoints() {
   const keys = pointKeys();
@@ -182,7 +183,7 @@ function renderPoints() {
   }).join('');
   state.points.forEach((p, i) => wirePoint(p, keys[i]));
   $('add-via').disabled = state.points.filter((p) => p.role === 'via').length >= MAX_VIA;
-  updatePlaceFrom(); updateAuto(); drawRouteOnly();
+  updatePlaceFrom(); updateAuto(); drawRouteOnly(); showAmb();
 }
 
 function wirePoint(p, k) {
@@ -199,7 +200,7 @@ function wirePoint(p, k) {
       msg.className = 'coord-msg' + (r.warning ? ' warn' : '');
     }
     $(`pt-${k}-loc`).textContent = Number.isFinite(p.lat) ? `📍 ${p.name || ''} (${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})` : '위치 미지정 — 검색 후 Enter 또는 지도 클릭';
-    updatePlaceFrom(); updateAuto(); drawRouteOnly();
+    updatePlaceFrom(); updateAuto(); drawRouteOnly(); showAmb();
   };
   coord.addEventListener('change', apply);
   coord.addEventListener('blur', apply);
@@ -244,11 +245,16 @@ function matchPlaces(q) {
 }
 
 function setupSearch(k) {
-  const q = $(`pt-${k}-q`), list = $(`pt-${k}-results`);
+  searchBox($(`pt-${k}-q`), $(`pt-${k}-results`), (pl) => setPointByKey(k, pl));
+}
+// 검색칸 공통: 주요지점(★)·카카오 장소검색·좌표 직접 입력 → onPick({name, lat, lon})
+function searchBox(q, list, onPick) {
   let t = null;
   q.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
+    const c = parseCoord(q.value, fmtNow());                       // 좌표를 그대로 입력한 경우
+    if (!c.error && Number.isFinite(c.lat)) { onPick({ name: q.value.trim(), lat: c.lat, lon: c.lon }); list.innerHTML = ''; return; }
     const first = list.querySelector('li[data-f], li[data-i]');
     if (first) first.click();
     else { clearTimeout(t); q.dispatchEvent(new Event('input')); setTimeout(() => list.querySelector('li[data-f], li[data-i]')?.click(), 900); }
@@ -264,8 +270,8 @@ function setupSearch(k) {
           + (note ? `<li class="empty"><small>${esc(note)}</small></li>` : '');
         list.querySelectorAll('li').forEach((li) => {
           const pick = () => {
-            if (li.dataset.f !== undefined) { const p = favs[+li.dataset.f]; setPointByKey(k, { name: p.name, lat: p.lat, lon: p.lon }); }
-            else { const d = kakao[+li.dataset.i]; setPointByKey(k, { name: d.place_name, lat: +d.y, lon: +d.x }); }
+            if (li.dataset.f !== undefined) { const p = favs[+li.dataset.f]; onPick({ name: p.name, lat: p.lat, lon: p.lon }); }
+            else { const d = kakao[+li.dataset.i]; onPick({ name: d.place_name, lat: +d.y, lon: +d.x }); }
           };
           li.addEventListener('click', pick);
           li.addEventListener('keydown', (e) => e.key === 'Enter' && pick());
@@ -304,7 +310,7 @@ function updatePlaceFrom() {
   const sel = $('place-from'); if (!sel) return;
   const keys = pointKeys(), cur = sel.value;
   sel.innerHTML = '<option value="">현재 지점에서 가져오기…</option>' + state.points.map((p, i) => Number.isFinite(p.lat)
-    ? `<option value="${keys[i]}">${esc(roleLabel(keys[i]).replace('(현장)', ''))}: ${esc(p.name || formatCoord(p, 'dd'))}</option>` : '').join('');
+    ? `<option value="${keys[i]}">${esc(roleLabel(keys[i]).replace(/\(.*\)/, ''))}: ${esc(p.name || formatCoord(p, 'dd'))}</option>` : '').join('');
   if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 
@@ -448,7 +454,7 @@ const notamText = () => Array.from({ length: state.slotCount }, (_, k) => $(`not
 function readyPoints() {
   const keys = pointKeys(), out = [], bad = [];
   state.points.forEach((p, i) => {
-    if (Number.isFinite(p.lat) && Number.isFinite(p.lon)) out.push({ name: p.name.trim() || roleLabel(keys[i]).replace('(현장)', ''), lat: p.lat, lon: p.lon, stayMin: p.role === 'via' ? p.stayMin : 0 });
+    if (Number.isFinite(p.lat) && Number.isFinite(p.lon)) out.push({ name: p.name.trim() || roleLabel(keys[i]).replace(/\(.*\)/, ''), lat: p.lat, lon: p.lon, stayMin: p.role === 'via' ? p.stayMin : 0 });
     else bad.push(roleLabel(keys[i]));
   });
   return { pts: out, bad };
@@ -506,13 +512,14 @@ async function run() {
   const { pts, bad } = readyPoints();
   if (bad.length) { $('run-msg').textContent = `좌표가 없거나 형식이 틀린 지점: ${bad.join(', ')}`; return; }
   const from = pts[0], to = pts[pts.length - 1];
+  const amb = ambPoints(pts);
   $('run').disabled = true; $('run-msg').textContent = '기상자료 수집 중…';
   checkVersion();
   try {
     const [settled, rr, road] = await Promise.all([
       Promise.allSettled(KINDS.map((k) => api('/api/' + k).then((r) => r.json()))),
       routeRegions(pts).catch(() => ({ regions: [], seaPoints: 0, available: false })),
-      api(`/api/drive?olat=${from.lat}&olon=${from.lon}&dlat=${to.lat}&dlon=${to.lon}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      (amb.from && amb.to ? api(`/api/drive?olat=${amb.from.lat}&olon=${amb.from.lon}&dlat=${amb.to.lat}&dlon=${amb.to.lon}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)),
     ]);
     const data = {}, dataStatus = {}, warns = [];
     settled.forEach((s, i) => {
@@ -545,7 +552,8 @@ async function run() {
     });
     const dsp = state.config.dispatch || {};
     const prep = Number.isFinite(+$('prep').value) && $('prep').value !== '' && +$('prep').value >= 0 ? Math.round(+$('prep').value) : (dsp.heliPrepMin ?? 15);
-    const tp = compareTransport({ prepMin: prep, flightMin: result.durationMin, overall: result.overall, road, closeMin: dsp.closeMin ?? 5 });
+    const tp = compareTransport({ prepMin: prep, flightMin: result.durationMin, overall: result.overall, road, closeMin: dsp.closeMin ?? 5, missing: amb.from && amb.to ? '' : '구급차 이동시간 칸에 현장→병원을 입력하거나, 경유지 1에 현장을 추가하세요' });
+    tp.ambRoute = amb.from && amb.to ? `${amb.from.name} → ${amb.to.name}` : '';
     result.transport = tp;
     result.reportText += ' | ' + transportLine(tp);
     state.last = { result, data, pts };
@@ -654,15 +662,35 @@ function renderTransport(tp) {
   const maxT = Math.max(tp.heli.totalMin, tp.amb ? tp.amb.totalMin : 0) || 1;
   const heli = `<div class="tcard ${tp.verdict === 'HELI' ? 'win' : ''}"><div>🚁 헬기</div><b class="big">${tp.heli.totalMin}분</b>
       <div style="width:${(tp.heli.totalMin / maxT) * 100}%">${bar([['p', tp.heli.prepMin], ['f', tp.heli.flightMin]])}</div>
-      <div>접수→이륙 ${tp.heli.prepMin}분 + 비행 ${tp.heli.flightMin}분</div></div>`;
+      <div>접수→이륙 ${tp.heli.prepMin}분 + 비행 ${tp.heli.flightMin}분</div><div class="tsub">항공대 → 현장 → 병원</div></div>`;
   const amb = tp.amb ? `<div class="tcard ${tp.verdict === 'AMBULANCE' && tp.diffMin !== null ? 'win' : ''}"><div>🚑 구급차</div><b class="big">${tp.amb.totalMin}분</b>
       <div style="width:${(tp.amb.totalMin / maxT) * 100}%">${bar([['r', tp.amb.totalMin]])}</div>
-      <div>도로 ${tp.amb.distanceKm}km · ${tp.amb.source === 'kakao' ? '카카오 길찾기' : '직선거리 기반 추정'}</div></div>`
-    : '<div class="tcard"><div>🚑 구급차</div><b class="big">-</b><div>이동시간을 구하지 못함</div></div>';
+      <div>도로 ${tp.amb.distanceKm}km · ${tp.amb.source === 'kakao' ? '카카오 길찾기' : '직선거리 기반 추정'}</div><div class="tsub">${esc(tp.ambRoute || '현장 → 병원')}</div></div>`
+    : `<div class="tcard"><div>🚑 구급차</div><b class="big">-</b><div>${esc(tp.text.includes('입력') ? '현장→병원 미지정' : '이동시간을 구하지 못함')}</div></div>`;
   el.innerHTML = `<h3>출동 수단 비교 <small>(헬기 vs 구급차 · 목적지까지 소요시간)</small></h3><div class="tcols">${heli}${amb}</div>
     <div class="verdict ${tp.verdict}">${esc(tp.text)}</div>
     ${tp.caution.map((c) => `<p class="tnote">※ ${esc(c)}</p>`).join('')}
     <p class="tnote">※ 헬기는 접수~이륙 준비 후 비행시간을 더한 값이며 착륙·환자 인계 시간은 포함하지 않습니다. 최종 판단은 통제관·기장이 합니다.</p>`;
+}
+// ---------- 구급차 이동시간(현장 → 병원) ----------
+state.amb = { from: null, to: null };
+function wireAmb() {
+  for (const side of ['from', 'to']) {
+    searchBox($(`amb-${side}-q`), $(`amb-${side}-results`), (pl) => { state.amb[side] = pl; $(`amb-${side}-q`).value = ''; $(`amb-${side}-q`).placeholder = pl.name; showAmb(); });
+  }
+  $('amb-clear').addEventListener('click', () => { state.amb = { from: null, to: null }; for (const s of ['from', 'to']) { $(`amb-${s}-q`).value = ''; $(`amb-${s}-q`).placeholder = s === 'from' ? '현장 (비우면 경유지 1)' : '병원 (비우면 목적지)'; } showAmb(); });
+  showAmb();
+}
+function showAmb() {
+  if (!$('amb-loc')) return;
+  const pts = readyPoints().pts, d = ambPoints(pts);
+  const fmt = (x, auto) => (x ? `📍 ${x.name} (${x.lat.toFixed(4)}, ${x.lon.toFixed(4)})${auto ? ' · 자동' : ''}` : '미지정');
+  $('amb-loc').textContent = `${fmt(d.from, !state.amb.from && d.from)} → ${fmt(d.to, !state.amb.to && d.to)}`;
+}
+// 입력이 없으면 경유지 1(현장)→목적지(병원)을 쓴다. 경유지도 없으면 null
+function ambPoints(pts) {
+  const via1 = pts.length > 2 ? pts[1] : null, dest = pts.length > 1 ? pts[pts.length - 1] : null;
+  return { from: state.amb.from || via1, to: state.amb.to || dest };
 }
 function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM (${(nm * 1.852).toFixed(1)}km)`; }
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }

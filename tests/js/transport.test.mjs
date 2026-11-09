@@ -13,3 +13,4 @@ test('자료없음·주의·추정값은 경고를 붙임', () => {
   assert.ok(c({ prepMin: 15, flightMin: 10, overall: 'YELLOW', road: road(100) }).caution.some((x) => /주의/.test(x)));
   assert.ok(c({ prepMin: 15, flightMin: 10, overall: 'GREEN', road: road(100, 'estimate') }).caution.some((x) => /추정/.test(x)));
 });
+test('입력 안내 문구가 있으면 그대로 표시', () => { assert.match(c({ prepMin: 15, flightMin: 10, overall: 'GREEN', road: null, missing: '구급차 이동시간 칸에 입력' }).text, /입력/); });
