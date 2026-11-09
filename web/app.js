@@ -162,7 +162,7 @@ const fmtNow = () => $('coord-fmt').value;
 function pointKeys() {
   let v = 0; return state.points.map((p) => (p.role === 'via' ? `via${++v}` : p.role));
 }
-const roleLabel = (key) => (key === 'from' ? '출발지(119항공대)' : key === 'to' ? '목적지(병원)' : `경유지 ${key.slice(3)}(현장 등)`);
+const roleLabel = (key) => (key === 'from' ? '출발지' : key === 'to' ? '목적지' : `경유지 ${key.slice(3)}`);
 
 function renderPoints() {
   const keys = pointKeys();
