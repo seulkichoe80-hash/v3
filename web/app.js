@@ -1,5 +1,6 @@
 // 화면 로직: 입력 → 자료 수집(/api/*) → 판정(judge.js) → 표시. 카카오맵이 없으면 좌표 직접 입력으로 계속 동작.
 import { distanceKm, sampleRouteMulti, isNightDuringRoute, routeLengthKm, KM_PER_NM } from './geo.js';
+import { compareTransport } from './transport.js';
 import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
 import { evaluate, GRADE_TEXT, dirText, SIGWX_TEXT } from './judge.js';
@@ -78,7 +79,7 @@ async function init() {
   showHistoryCount();
   $('usage-csv').addEventListener('click', downloadUsage);
   refreshUsage();
-  $('cruise').value = cc.config.cruiseKt;
+  $('cruise').value = cc.config.cruiseKt; $('prep').value = (cc.config.dispatch || {}).heliPrepMin ?? 15;
   $('depart').value = kstInputNow();
   const fmt = store.get(FMT_KEY, 'dd'); $('coord-fmt').value = ['dd', 'ddm', 'dms'].includes(fmt) ? fmt : 'dd';
   $('coord-fmt').addEventListener('change', () => { store.set(FMT_KEY, $('coord-fmt').value); reformatAll(); renderPlaces(); $('place-coord').placeholder = '좌표 (' + COORD_PLACEHOLDER[fmtNow()].split('  ')[0] + ')'; });
@@ -508,9 +509,10 @@ async function run() {
   $('run').disabled = true; $('run-msg').textContent = '기상자료 수집 중…';
   checkVersion();
   try {
-    const [settled, rr] = await Promise.all([
+    const [settled, rr, road] = await Promise.all([
       Promise.allSettled(KINDS.map((k) => api('/api/' + k).then((r) => r.json()))),
       routeRegions(pts).catch(() => ({ regions: [], seaPoints: 0, available: false })),
+      api(`/api/drive?olat=${from.lat}&olon=${from.lon}&dlat=${to.lat}&dlon=${to.lon}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     const data = {}, dataStatus = {}, warns = [];
     settled.forEach((s, i) => {
@@ -541,7 +543,13 @@ async function run() {
       notams: splitNotams(text).map(parseNotam), notamsProvided: text.trim().length > 0,
       routeRegions: rr.regions, now: new Date(), config: state.config,
     });
+    const dsp = state.config.dispatch || {};
+    const prep = Number.isFinite(+$('prep').value) && $('prep').value !== '' && +$('prep').value >= 0 ? Math.round(+$('prep').value) : (dsp.heliPrepMin ?? 15);
+    const tp = compareTransport({ prepMin: prep, flightMin: result.durationMin, overall: result.overall, road, closeMin: dsp.closeMin ?? 5 });
+    result.transport = tp;
+    result.reportText += ' | ' + transportLine(tp);
     state.last = { result, data, pts };
+    renderTransport(tp);
     render(result, { isNight, isSea, warns });
     drawMap(result, data, pts);
     $('run-msg').textContent = `판단 완료 ${kstStr(new Date())}`;
@@ -634,6 +642,27 @@ async function downloadUsage() {
   a.href = URL.createObjectURL(await r.blob());
   a.download = `하늘길119-공용누적이력-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
+}
+function transportLine(tp) {
+  const h = `헬기 총 ${tp.heli.totalMin}분(접수→이륙 ${tp.heli.prepMin}분+비행 ${tp.heli.flightMin}분)`;
+  const a = tp.amb ? `구급차 ${tp.amb.totalMin}분(${tp.amb.distanceKm}km, ${tp.amb.source === 'kakao' ? '카카오 길찾기' : '추정'})` : '구급차 시간 미확인';
+  return `출동수단 비교: ${h} vs ${a} → ${tp.text}`;
+}
+function renderTransport(tp) {
+  const el = $('transport'); el.hidden = false;
+  const bar = (parts) => { const t = parts.reduce((a, [, v]) => a + v, 0) || 1; return `<div class="bar">${parts.map(([c, v]) => `<i class="${c}" style="width:${(v / t) * 100}%"></i>`).join('')}</div>`; };
+  const maxT = Math.max(tp.heli.totalMin, tp.amb ? tp.amb.totalMin : 0) || 1;
+  const heli = `<div class="tcard ${tp.verdict === 'HELI' ? 'win' : ''}"><div>🚁 헬기</div><b class="big">${tp.heli.totalMin}분</b>
+      <div style="width:${(tp.heli.totalMin / maxT) * 100}%">${bar([['p', tp.heli.prepMin], ['f', tp.heli.flightMin]])}</div>
+      <div>접수→이륙 ${tp.heli.prepMin}분 + 비행 ${tp.heli.flightMin}분</div></div>`;
+  const amb = tp.amb ? `<div class="tcard ${tp.verdict === 'AMBULANCE' && tp.diffMin !== null ? 'win' : ''}"><div>🚑 구급차</div><b class="big">${tp.amb.totalMin}분</b>
+      <div style="width:${(tp.amb.totalMin / maxT) * 100}%">${bar([['r', tp.amb.totalMin]])}</div>
+      <div>도로 ${tp.amb.distanceKm}km · ${tp.amb.source === 'kakao' ? '카카오 길찾기' : '직선거리 기반 추정'}</div></div>`
+    : '<div class="tcard"><div>🚑 구급차</div><b class="big">-</b><div>이동시간을 구하지 못함</div></div>';
+  el.innerHTML = `<h3>출동 수단 비교 <small>(헬기 vs 구급차 · 목적지까지 소요시간)</small></h3><div class="tcols">${heli}${amb}</div>
+    <div class="verdict ${tp.verdict}">${esc(tp.text)}</div>
+    ${tp.caution.map((c) => `<p class="tnote">※ ${esc(c)}</p>`).join('')}
+    <p class="tnote">※ 헬기는 접수~이륙 준비 후 비행시간을 더한 값이며 착륙·환자 인계 시간은 포함하지 않습니다. 최종 판단은 통제관·기장이 합니다.</p>`;
 }
 function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM (${(nm * 1.852).toFixed(1)}km)`; }
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }

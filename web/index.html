@@ -58,6 +58,7 @@
     <div class="grid2">
       <label>출발 예정시각(KST)<input id="depart" type="datetime-local"></label>
       <label>순항속도(kt)<input id="cruise" type="number" min="40" max="200" step="5"></label>
+      <label>접수→이륙(분)<input id="prep" type="number" min="0" max="120" step="1"><small>헬기 출동 준비(기본 15분)</small></label>
       <label>주간/야간<select id="daynight"><option value="auto">자동</option><option value="day">주간</option><option value="night">야간</option></select><small id="daynight-auto"></small></label>
       <label>육상/해상<select id="landsea"><option value="auto">자동</option><option value="land">육상</option><option value="sea">해상</option></select><small id="landsea-auto"></small></label>
     </div>
@@ -85,6 +86,7 @@
     <h2 id="h-result">판단 조언</h2>
     <div id="overall" class="overall empty">입력 후 [판단 실행]</div>
     <div id="route-info" class="route-info"></div>
+    <div id="transport" class="transport" hidden></div>
     <div id="data-warn" class="data-warn"></div>
     <div id="sun" class="sun"></div>
     <div class="table-wrap legs-wrap"><table>

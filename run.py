@@ -30,6 +30,7 @@ def main():
     srv = make_server(a.port, client, config, local.get('kakaoJsKey', ''),
                       os.path.join(ROOT, 'logs', 'history.csv'), os.path.join(ROOT, 'web'),
                       access_code=os.environ.get('ACCESS_CODE', ''),
+                      kakao_rest_key=os.environ.get('KAKAO_REST_KEY') or local.get('kakaoRestKey', ''),
                       notam_store=FileStore(os.environ.get('HELIWX_NOTAM_FILE') or os.path.join(ROOT, 'logs', 'notams.json')))
     url = f'http://localhost:{a.port}/'
     print(f'하늘길119(소방헬기 출동 운항판단 지원시스템) 실행 중: {url}  {"(시험 자료)" if a.mock else ""}  종료: Ctrl+C')
