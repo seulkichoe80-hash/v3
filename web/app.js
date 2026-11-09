@@ -520,7 +520,7 @@ async function run() {
   checkVersion();
   try {
     const [settled, rr, road] = await Promise.all([
-      Promise.allSettled(KINDS.map((k) => api('/api/' + k).then((r) => r.json()))),
+      Promise.allSettled(KINDS.map((k) => fetchKind(k))),
       routeRegions(pts).catch(() => ({ regions: [], seaPoints: 0, available: false })),
       (amb.from && amb.to ? api(`/api/drive?olat=${amb.from.lat}&olon=${amb.from.lon}&dlat=${amb.to.lat}&dlon=${amb.to.lon}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)),
     ]);
@@ -653,6 +653,16 @@ async function downloadUsage() {
   a.href = URL.createObjectURL(await r.blob());
   a.download = `재난하늘119-공용누적이력-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
+}
+// 기상 자료 한 종류 수신: 실패(오류·응답 없음)이면 잠시 뒤 한 번 더 시도
+async function fetchKind(k) {
+  const once = () => api('/api/' + k).then((r) => r.json());
+  try {
+    const d = await once();
+    if (!(d.error && !(d.items || []).length)) return d;
+  } catch (e) { if (/접속코드/.test(e.message)) throw e; }
+  await new Promise((r) => setTimeout(r, 1500));
+  return once();
 }
 function transportLine(tp) {
   const h = `헬기 총 ${tp.heli.totalMin}분(접수→이륙 ${tp.heli.prepMin}분+비행 ${tp.heli.flightMin}분)`;

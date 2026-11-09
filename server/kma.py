@@ -23,7 +23,7 @@ TTL_MIN = {'sigwx': 30, 'asos': 5, 'aws': 2, 'warn': 5, 'lightning': 2, 'metar':
 FIXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tests', 'fixtures', 'kma')
 
 
-def urllib_fetch(url, timeout=5):
+def urllib_fetch(url, timeout=8):
     req = urllib.request.Request(url, headers={'User-Agent': 'haneulgil119/1.0'})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         raw = r.read()
@@ -62,10 +62,11 @@ def sigwx_issue_utc(now, back=0):
 
 
 class KmaClient:
-    def __init__(self, auth_key, config, fetch=urllib_fetch, now=None, timeout=5):
+    def __init__(self, auth_key, config, fetch=urllib_fetch, now=None, timeout=8):
         self.key, self.config, self.fetch, self.timeout = auth_key, config, fetch, timeout
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.cache = {}  # kind -> (fetched_at, items)
+        self._t0 = time.time()
 
     # --- URL ---
     def _url(self, kind, **kw):
@@ -79,8 +80,19 @@ class KmaClient:
         url = ENDPOINTS[kind].format(**fmt)
         return url + ('&' if '?' in url else '?') + 'authKey=' + self.key
 
+    def _fetch_retry(self, url):
+        """시간 초과·일시적 연결 오류는 한 번 더 시도(SIGWX는 전체 시간 제한 때문에 제외). 한 종류당 약 12초가 넘으면 재시도하지 않는다."""
+        t0 = self._t0
+        tmo = min(self.timeout, 6) if 'amo_sigwx' in url else self.timeout   # SIGWX는 최대 3회 시도하므로 짧게
+        try:
+            return self.fetch(url, timeout=tmo)
+        except (TimeoutError, OSError) as e:
+            if 'amo_sigwx' in url or time.time() - t0 > 12 or isinstance(e, (PermissionError, FileNotFoundError)):
+                raise
+            return self.fetch(url, timeout=self.timeout)
+
     def _get(self, kind, **kw):
-        text = self.fetch(self._url(kind, **kw), timeout=self.timeout)
+        text = self._fetch_retry(self._url(kind, **kw))
         # API허브 오류 응답: {"result":{"status":401,"message":"..."}} — 어느 자료든 오류 사유를 그대로 보여준다.
         if text.lstrip().startswith('{'):
             try:
@@ -186,6 +198,7 @@ class KmaClient:
         hit = self.cache.get(kind)
         if hit and (now - hit[0]) < timedelta(minutes=TTL_MIN.get(kind, 5)):
             return self._resp(hit[1], hit[0], stale=False)
+        self._t0 = time.time()
         try:
             items = self._collect(kind)
             self.cache[kind] = (now, items)

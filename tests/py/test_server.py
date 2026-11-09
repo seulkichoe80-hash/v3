@@ -155,3 +155,26 @@ class SigwxTmfc(unittest.TestCase):
         def f(url, timeout=5): raise OSError('HTTP Error 500')
         r = KmaClient(KEY, CONFIG, fetch=f, now=Clock()).get('sigwx')
         self.assertEqual(r['items'], []); self.assertIn('500', r['error'])
+
+
+class RetryTest(unittest.TestCase):
+    def test_timeout_retried_once(self):
+        calls = {'n': 0}
+        def flaky(url, timeout=8):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                raise TimeoutError('The read operation timed out')
+            return mock_fetch(url, timeout)
+        c = KmaClient(KEY, CONFIG, fetch=flaky, now=Clock())
+        r = c.get('lightning')
+        self.assertFalse(r.get('error')); self.assertGreaterEqual(calls['n'], 2)
+    def test_two_timeouts_report_error(self):
+        def dead(url, timeout=8): raise TimeoutError('The read operation timed out')
+        r = KmaClient(KEY, CONFIG, fetch=dead, now=Clock()).get('lightning')
+        self.assertIn('TimeoutError', r['error']); self.assertEqual(r['items'], [])
+    def test_non_network_errors_not_retried(self):
+        calls = {'n': 0}
+        def bad(url, timeout=8):
+            calls['n'] += 1; return '<html>오류</html>'
+        KmaClient(KEY, CONFIG, fetch=bad, now=Clock()).get('lightning')
+        self.assertEqual(calls['n'], 1)
