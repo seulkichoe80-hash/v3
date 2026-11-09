@@ -1,6 +1,6 @@
 """구급차(자동차) 이동시간: 카카오모빌리티 자동차 길찾기 API(REST 키 필요) → 키 없음·실패 시 직선거리 기반 추정.
 키는 서버 환경변수 KAKAO_REST_KEY에만 둔다(화면·브라우저로 나가지 않음)."""
-import json, math, time, urllib.parse, urllib.request
+import json, math, time, urllib.error, urllib.parse, urllib.request
 
 URL = 'https://apis-navi.kakaomobility.com/v1/directions'
 _CACHE = {}
@@ -47,6 +47,10 @@ def drive_time(o, d, rest_key, cfg, http_get=_http_get, now=time.time):
         res = {'ok': True, 'source': 'kakao', 'distanceKm': round(s['distance'] / 1000, 1), 'durationMin': max(1, round(s['duration'] / 60))}
         _CACHE[key] = (now(), res)
         return res
-    except Exception as e:      # 키 오류·권한 미승인·네트워크 등 → 추정값으로 대체하고 사유를 표시
-        est['note'] = '카카오 길찾기 조회 실패(' + type(e).__name__ + ') — 직선거리 기반 추정'
+    except urllib.error.HTTPError as e:
+        why = {401: '키 오류(REST API 키 확인)', 403: '사용 권한 없음(카카오 길찾기 API 사용 신청·활성화 필요)', 429: '호출 한도 초과'}.get(e.code, f'HTTP {e.code}')
+        est['note'] = f'카카오 길찾기 실패: {why} — 직선거리 기반 추정'
+        return est
+    except Exception as e:      # 경로 없음·형식 오류·네트워크 등 → 추정값으로 대체하고 사유를 표시
+        est['note'] = '카카오 길찾기 조회 실패(' + (str(e)[:40] or type(e).__name__) + ') — 직선거리 기반 추정'
         return est

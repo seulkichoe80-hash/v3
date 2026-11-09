@@ -263,3 +263,7 @@ table.kv td { white-space: normal; }
 .amb-line .arrow { font-weight: 800; color: #1f4f82; }
 .transport .tsub { font-size: 11.5px; color: var(--muted); }
 @media (max-width: 760px) { .amb-line { flex-wrap: wrap; } .amb-line .search { flex-basis: 100%; } .amb-line .arrow { transform: rotate(90deg); } }
+
+.amb-line .results { min-width: 250px; }
+.amb-line .search:nth-of-type(2) .results, .amb-line .search + .arrow + .search .results { left: auto; right: 0; }
+.transport .tsub.warn { color: #9a1b14; font-weight: 700; }

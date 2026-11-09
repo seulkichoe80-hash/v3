@@ -38,6 +38,16 @@ if (!/정부대전청사 \(36\.36/.test(await page.textContent('#pt-to-loc'))) f
 // 결과 없음 안내
 await page.fill('#pt-to-q', '없는장소이름'); await page.dispatchEvent('#pt-to-q', 'input');
 await page.waitForFunction(() => /검색 결과 없음/.test(document.querySelector('#pt-to-results').textContent), null, { timeout: 5000 }).catch(() => fail('결과 없음 안내 없음'));
+// 구급차 칸: 검색 결과를 고르면 목록이 닫혀야 함
+await page.fill('#amb-from-q', '아주대'); await page.dispatchEvent('#amb-from-q', 'input');
+await page.waitForFunction(() => document.querySelectorAll('#amb-from-results li').length > 0, null, { timeout: 5000 }).catch(() => fail('구급차 칸 검색 결과 없음'));
+await page.click('#amb-from-results li:has-text("아주대학교병원")');
+if ((await page.locator('#amb-from-results li').count()) !== 0) fail('선택 뒤에도 목록이 남아 있음');
+if (!/아주대학교병원/.test(await page.textContent('#amb-loc'))) fail('구급차 출발지 선택이 반영되지 않음');
+await page.fill('#amb-to-q', '정부대전'); await page.dispatchEvent('#amb-to-q', 'input');
+await page.waitForFunction(() => document.querySelectorAll('#amb-to-results li').length > 0, null, { timeout: 5000 });
+await page.click('h2#h-input'); await page.waitForTimeout(100);
+if ((await page.locator('#amb-to-results li').count()) !== 0) fail('바깥을 눌러도 목록이 안 닫힘');
 if (errors.length) fail('페이지 오류: ' + errors.join(' / '));
 console.log('PASS kakao');
 await browser.close(); srv.kill();

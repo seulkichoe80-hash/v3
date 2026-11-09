@@ -249,6 +249,8 @@ function setupSearch(k) {
 }
 // 검색칸 공통: 주요지점(★)·카카오 장소검색·좌표 직접 입력 → onPick({name, lat, lon})
 function searchBox(q, list, onPick) {
+  document.addEventListener('click', (e) => { if (!q.contains(e.target) && !list.contains(e.target)) list.innerHTML = ''; });
+  q.addEventListener('keydown', (e) => { if (e.key === 'Escape') list.innerHTML = ''; });
   let t = null;
   q.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
@@ -273,8 +275,9 @@ function searchBox(q, list, onPick) {
             if (li.dataset.f !== undefined) { const p = favs[+li.dataset.f]; onPick({ name: p.name, lat: p.lat, lon: p.lon }); }
             else { const d = kakao[+li.dataset.i]; onPick({ name: d.place_name, lat: +d.y, lon: +d.x }); }
           };
-          li.addEventListener('click', pick);
-          li.addEventListener('keydown', (e) => e.key === 'Enter' && pick());
+          const pickClose = () => { pick(); list.innerHTML = ''; };
+          li.addEventListener('click', pickClose);
+          li.addEventListener('keydown', (e) => e.key === 'Enter' && pickClose());
         });
       };
       if (query.length < 1) { list.innerHTML = ''; return; }
@@ -665,7 +668,7 @@ function renderTransport(tp) {
       <div>접수→이륙 ${tp.heli.prepMin}분 + 비행 ${tp.heli.flightMin}분</div><div class="tsub">항공대 → 현장 → 병원</div></div>`;
   const amb = tp.amb ? `<div class="tcard ${tp.verdict === 'AMBULANCE' && tp.diffMin !== null ? 'win' : ''}"><div>🚑 구급차</div><b class="big">${tp.amb.totalMin}분</b>
       <div style="width:${(tp.amb.totalMin / maxT) * 100}%">${bar([['r', tp.amb.totalMin]])}</div>
-      <div>도로 ${tp.amb.distanceKm}km · ${tp.amb.source === 'kakao' ? '카카오 길찾기' : '직선거리 기반 추정'}</div><div class="tsub">${esc(tp.ambRoute || '현장 → 병원')}</div></div>`
+      <div>도로 ${tp.amb.distanceKm}km · ${tp.amb.source === 'kakao' ? '카카오맵 최단시간 경로' : '직선거리 기반 추정'}</div><div class="tsub">${esc(tp.ambRoute || '현장 → 병원')}</div>${tp.amb.source === 'kakao' ? '' : `<div class="tsub warn">⚠ ${esc(tp.amb.note || '추정값')}</div>`}</div>`
     : `<div class="tcard"><div>🚑 구급차</div><b class="big">-</b><div>${esc(tp.text.includes('입력') ? '현장→병원 미지정' : '이동시간을 구하지 못함')}</div></div>`;
   el.innerHTML = `<h3>출동 수단 비교 <small>(헬기 vs 구급차 · 목적지까지 소요시간)</small></h3><div class="tcols">${heli}${amb}</div>
     <div class="verdict ${tp.verdict}">${esc(tp.text)}</div>

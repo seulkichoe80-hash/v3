@@ -30,6 +30,12 @@ class Drive(unittest.TestCase):
             drive._CACHE.clear()
             r = drive.drive_time(SEO, BUS, 'K', CFG, http_get=bad)
             self.assertEqual(r['source'], 'estimate'); self.assertIn('실패', r['note'])
+    def test_http_errors_explained(self):
+        import urllib.error
+        for code, word in [(401, '키 오류'), (403, '사용 권한'), (429, '한도')]:
+            drive._CACHE.clear()
+            def bad(*a, **k): raise urllib.error.HTTPError('u', code, 'm', {}, None)
+            r = drive.drive_time(SEO, BUS, 'K', CFG, http_get=bad); self.assertEqual(r['source'], 'estimate'); self.assertIn(word, r['note'])
     def test_api(self):
         def call(q, **kw): return handle_api('GET', '/api/drive?' + q, {}, b'', client=None, config={'dispatch': CFG}, kakao_js_key='', **kw)
         st, _, b = call('olat=37.5&olon=127&dlat=36.3&dlon=127.4'); d = json.loads(b)
