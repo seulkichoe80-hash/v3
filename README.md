@@ -144,3 +144,4 @@ node tests/e2e/mobile.mjs                  # 폰 화면(390px) 점검 (표가 �
 node tests/e2e/sigwx.mjs                   # 저고도 SIGWX 전체 흐름 (실제 XML 모양, 구역 통과·비통과 경로)
 node tests/e2e/stale.mjs                   # 낡은 화면 감지 (서버 버전이 바뀌면 새로고침 안내)
 ```
+
