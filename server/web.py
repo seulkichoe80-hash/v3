@@ -169,9 +169,12 @@ def _usage(method, q, body, store):
     try:
         if method == 'POST':
             try:
-                d = json.loads(body[:3000] or b'{}')
+                d = json.loads(body[:30000] or b'{}')
             except ValueError:
                 return _json(400, {'error': 'JSON 형식 오류'})
+            if isinstance(d, dict) and isinstance(d.get('entries'), list):
+                n = store.usage_import(d['entries'])
+                return _json(200, {'ok': True, 'imported': n, 'stats': store.usage_stats()})
             store.usage_add(d)
             return _json(200, {'ok': True, 'stats': store.usage_stats()})
         if method == 'GET':

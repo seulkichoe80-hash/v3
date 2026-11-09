@@ -587,6 +587,7 @@ function render(r, ctx) {
       · ${n.activeDuringFlight === null ? '발효기간 해석 불가' : n.activeDuringFlight ? '<b>비행 시간대 발효</b>' : '비행 시간대 미발효'}
       <div>${esc(kstStr(n.start, true))} ~ ${n.endPerm ? 'PERM' : esc(kstStr(n.end, true))}${n.endEst ? ' (EST)' : ''} KST · ${esc(n.lower)}~${esc(n.upper)}
       ${n.geomSource === 'Q' ? ' · Q-line 기준(근사)' : ''}</div>
+      ${n.center ? `<div class="ncoord">📍 ${esc(formatCoord(n.center, fmtNow()))} · 반경 ${esc(fmtNm(n.radiusNm))}</div>` : ''}
       ${n.needsPermission ? `<div class="perm">⚠ 소방헬기 사전허가 필요${n.phones.length ? ': ' + esc(n.phones.join(', ')) : ''}</div>` : ''}
       <details><summary>원문</summary><pre>${esc(n.raw)}</pre></details></div>`).join('')
     : `<p class="hint">${notamText().trim() ? '확인 대상(D 시리즈) NOTAM 없음' : 'NOTAM 미입력 — xNotam 조회 후 붙여넣기'}</p>`)
@@ -604,14 +605,25 @@ function render(r, ctx) {
   $('sigwx-raw-wrap').hidden = false;
 }
 
+async function syncLocalUsage() {      // 이 브라우저의 지난 이력(집계 기준일 이후)을 공용 누적에 합침. 같은 기록은 중복되지 않음
+  const SINCE = Date.parse('2026-11-08T00:00:00+09:00'), DONE_KEY = 'heliwx.usageSynced';
+  const rows = store.get(HIST_KEY, []).filter((r) => r.time && Date.parse(r.time) >= SINCE && r.from && r.to);
+  if (!rows.length || store.get(DONE_KEY, 0) >= rows.length) return;
+  for (let i = 0; i < rows.length; i += 50) {
+    const r = await api('/api/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: rows.slice(i, i + 50) }) });
+    if (!r.ok) return;
+  }
+  store.set(DONE_KEY, rows.length);
+}
 async function refreshUsage() {
   if (!state.usageShared) return;
+  try { await syncLocalUsage(); } catch { /* 합치기는 다음에 다시 시도 */ }
   try { const d = await (await api('/api/usage')).json(); if (d.shared) showUsage(d); } catch { /* 누적 표시는 부가 기능 */ }
 }
 function showUsage(u) {
   $('usage-box').hidden = false; $('usage-chip').hidden = false;
   $('usage-total').textContent = u.total.toLocaleString('ko-KR'); $('usage-chip-n').textContent = u.total.toLocaleString('ko-KR');
-  $('usage-sub').textContent = u.total ? `· 오늘 ${u.today}건 · 사용일 ${u.activeDays}일 · ${u.firstDate} 부터` : '· 아직 기록 없음';
+  $('usage-sub').textContent = u.total ? `· 오늘 ${u.today}건 · 사용일 ${u.activeDays}일` + ` · ${u.since} 부터 집계` : '· 아직 기록 없음';
   const max = Math.max(1, ...u.last7.map((d) => d.count));
   $('usage-bars').innerHTML = u.last7.map((d) => `<span class="${d.count ? '' : 'zero'}" style="height:${Math.max(4, Math.round((d.count / max) * 100))}%" title="${esc(d.date)} ${d.count}건"></span>`).join('');
 }
@@ -623,6 +635,7 @@ async function downloadUsage() {
   a.download = `하늘길119-공용누적이력-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
 }
+function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM (${(nm * 1.852).toFixed(1)}km)`; }
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
 function downloadHistory() {
   const rows = store.get(HIST_KEY, []);
@@ -665,7 +678,9 @@ function drawMap(result, data, pts) {
       add(new k.CustomOverlay({ position: ll(o), content: `<div class="stn-dot ${g(o)}" title="${esc(o.name)} 시정 ${o.visM ?? '-'}m 운고 ${o.ceilFt ?? '-'}ft"></div>` }));
     }
     for (const n of result.notams.filter((n) => n.inScope && n.center)) {
-      add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 2, strokeColor: '#7a3fb0', strokeOpacity: 0.9, fillColor: '#7a3fb0', fillOpacity: 0.12 }));
+      const off = n.activeDuringFlight === false;      // 비행 시간대에 발효하지 않는 NOTAM은 점선·옅게
+      add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
+      add(new k.CustomOverlay({ position: ll(n.center), yAnchor: 1.2, content: `<div class="nt-label${off ? ' off' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}</div>` }));
       b.extend(ll(n.center));
     }
     const SIG_COLOR = { ICE: '#1f77d0', TURB: '#c4231a', MTN: '#7a5a2a', VIS: '#2e9e5b', TS: '#b100c4', CLD: '#4b6b8a', WIND: '#3b4cc0', ETC: '#555' };

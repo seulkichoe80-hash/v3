@@ -13,6 +13,7 @@ KEY = 'heliwx:notams'
 PLACES_KEY = 'heliwx:places'
 USAGE_KEY = 'heliwx:usage'
 MAX_USAGE = 50000
+USAGE_SINCE = '2026-11-08'     # 누적 집계 기준일(KST 0시)
 
 
 def _now():
@@ -64,17 +65,45 @@ class _Ops:
         self.hdel(KEY, str(slot))
 
     # 사용 이력(모든 사용자 공용 누적): 개인 식별정보 없이 시각·출발·경유·목적지·거리·판정만 저장
-    def usage_add(self, e):
+    def usage_add(self, e, strict=False):
+        """e['time'](ISO)이 집계 기간(기준일 0시 KST ~ 지금+10분) 안이면 그 시각으로, 아니면(strict=False) 지금 시각으로 기록.
+        같은 시각·출발·목적지는 같은 키라 여러 번 보내도 한 건(이 브라우저 이력 합치기용)."""
+        import hashlib
+        from datetime import timedelta
         if not isinstance(e, dict):
             raise ValueError('형식 오류')
         km = e.get('distanceKm')
-        rec = {'t': _now(), 'from': str(e.get('from', ''))[:50], 'via': str(e.get('via', ''))[:120], 'to': str(e.get('to', ''))[:50],
+        t = None
+        try:
+            ts = datetime.fromisoformat(str(e.get('time', '')).replace('Z', '+00:00'))
+            if ts.tzinfo is None:
+                raise ValueError
+            lo = datetime.strptime(USAGE_SINCE, '%Y-%m-%d').replace(tzinfo=timezone(timedelta(hours=9)))
+            if lo <= ts <= datetime.now(timezone.utc) + timedelta(minutes=10):
+                t = ts.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        except ValueError:
+            pass
+        if t is None:
+            if strict:
+                raise ValueError('집계 기간 밖')
+            t = _now()
+        rec = {'t': t, 'from': str(e.get('from', ''))[:50], 'via': str(e.get('via', ''))[:120], 'to': str(e.get('to', ''))[:50],
                'km': km if isinstance(km, (int, float)) and not isinstance(km, bool) and math.isfinite(km) else None,
                'overall': str(e.get('overall', ''))[:10]}
         if not rec['from'] or not rec['to']:
             raise ValueError('출발·목적지 필요')
-        self.hset(USAGE_KEY, f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}", json.dumps(rec, ensure_ascii=False))
+        key = hashlib.sha1(f"{t}|{rec['from']}|{rec['to']}".encode('utf-8')).hexdigest()[:20]
+        self.hset(USAGE_KEY, key, json.dumps(rec, ensure_ascii=False))
         return rec
+
+    def usage_import(self, entries):
+        ok = 0
+        for e in entries[:5000]:
+            try:
+                self.usage_add(e, strict=True); ok += 1
+            except ValueError:
+                continue
+        return ok
 
     def usage_list(self):
         out = []
@@ -99,7 +128,7 @@ class _Ops:
             by[r.get('overall', '')] = by.get(r.get('overall', ''), 0) + 1
         now = datetime.now(kst)
         last7 = [(now - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
-        return {'total': sum(days.values()), 'today': days.get(now.strftime('%Y-%m-%d'), 0), 'activeDays': len(days),
+        return {'since': USAGE_SINCE, 'total': sum(days.values()), 'today': days.get(now.strftime('%Y-%m-%d'), 0), 'activeDays': len(days),
                 'firstDate': min(days) if days else None, 'lastDate': max(days) if days else None,
                 'last7': [{'date': d, 'count': days.get(d, 0)} for d in last7], 'byOverall': by}
 

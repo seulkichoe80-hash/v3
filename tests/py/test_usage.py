@@ -53,3 +53,23 @@ class Api(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class Import(unittest.TestCase):
+    def test_since_dedupe(self):
+        from datetime import datetime, timezone, timedelta
+        s = MemoryStore()
+        now = datetime.now(timezone.utc)
+        def e(t, a='A'): return {'time': t.isoformat().replace('+00:00', 'Z'), 'from': a, 'to': 'B', 'overall': 'GREEN'}
+        old = datetime(2026, 11, 7, 14, 59, tzinfo=timezone.utc)      # 11/7 23:59 KST → 기준일 전
+        ok = datetime(2026, 11, 7, 15, 1, tzinfo=timezone.utc)        # 11/8 00:01 KST
+        n = s.usage_import([e(old), e(ok), e(ok), e(ok, 'C'), e(now + timedelta(hours=2)), {'time': 'x', 'from': 'A', 'to': 'B'}])
+        self.assertEqual(n, 3)                                          # 기준일 전·미래·시각 오류 제외, 같은 기록은 한 건
+        st = s.usage_stats()
+        self.assertEqual((st['total'], st['firstDate'], st['since']), (2, '2026-11-08', '2026-11-08'))
+        s.usage_add(e(ok)); self.assertEqual(s.usage_stats()['total'], 2)  # 단건 전송도 같은 키
+    def test_api_import(self):
+        s = MemoryStore()
+        body = json.dumps({'entries': [{'time': '2026-11-08T03:00:00Z', 'from': 'A', 'to': 'B', 'distanceKm': 5, 'overall': 'RED'}]}).encode()
+        st, _, b = handle_api('POST', '/api/usage', {}, body, client=None, config={}, kakao_js_key='', notam_store=s)
+        self.assertEqual((st, json.loads(b)['imported']), (200, 1))

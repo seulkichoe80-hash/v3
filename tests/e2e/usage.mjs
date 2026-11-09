@@ -16,6 +16,7 @@ if (await page.textContent('#usage-total') !== '0') fail('초기 누적은 0이�
 await page.fill('#pt-from-coord', '37.5583, 126.7906'); await page.dispatchEvent('#pt-from-coord', 'change');
 await page.fill('#pt-to-coord', '37.5547, 126.9707'); await page.dispatchEvent('#pt-to-coord', 'change');
 for (let k = 1; k <= 2; k++) {
+  if (k > 1) await page.waitForTimeout(1100);   // 같은 출발·목적지·초는 한 건으로 합쳐지므로 간격을 둠
   await page.click('#run'); await page.waitForFunction((n) => document.querySelector('#usage-total').textContent === String(n), k, { timeout: 10000 }).catch(() => fail(`${k}번째 실행 뒤 누적이 ${k}이 아님`));
 }
 if (!/오늘 2건/.test(await page.textContent('#usage-sub'))) fail('오늘 건수 표시 이상: ' + await page.textContent('#usage-sub'));
