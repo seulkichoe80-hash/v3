@@ -62,8 +62,9 @@ def sigwx_issue_utc(now, back=0):
 
 
 class KmaClient:
-    def __init__(self, auth_key, config, fetch=urllib_fetch, now=None, timeout=8):
+    def __init__(self, auth_key, config, fetch=urllib_fetch, now=None, timeout=8, persist=None):
         self.key, self.config, self.fetch, self.timeout = auth_key, config, fetch, timeout
+        self.persist = persist      # wx_save/wx_load를 가진 공유 저장소(없으면 메모리 캐시만)
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.cache = {}  # kind -> (fetched_at, items)
         self._t0 = time.time()
@@ -202,11 +203,24 @@ class KmaClient:
         try:
             items = self._collect(kind)
             self.cache[kind] = (now, items)
+            if self.persist is not None and items:
+                try:
+                    self.persist.wx_save(kind, P.iso(now), items)
+                except Exception:
+                    pass            # 보관 실패는 판정에 영향 없음
             return self._resp(items, now, stale=False)
-        except Exception as e:  # 실패: 캐시가 있으면 오래된 자료로 응답
+        except Exception as e:  # 실패: 메모리 → 공유 저장소 순으로 직전 자료를 오래된 자료로 응답
             msg = f'{type(e).__name__}: {e}'.replace(self.key, '****') if self.key else str(e)
             if hit:
                 return self._resp(hit[1], hit[0], stale=True, error=msg)
+            if self.persist is not None:
+                try:
+                    d = self.persist.wx_load(kind)
+                    if d:
+                        at = datetime.fromisoformat(d['at'].replace('Z', '+00:00'))
+                        return self._resp(d['items'], at, stale=True, error=msg)
+                except Exception:
+                    pass
             return {'items': [], 'fetchedAt': None, 'stale': False, 'ageMin': None, 'error': msg}
 
     def _resp(self, items, at, stale, error=None):

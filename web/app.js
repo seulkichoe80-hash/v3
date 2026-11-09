@@ -679,7 +679,7 @@ function renderTransport(tp) {
   const amb = tp.amb ? `<div class="tcard ${tp.verdict === 'AMBULANCE' && tp.diffMin !== null ? 'win' : ''}"><div>🚑 구급차</div><b class="big">${tp.amb.totalMin}분</b>
       <div style="width:${(tp.amb.totalMin / maxT) * 100}%">${bar([['r', tp.amb.totalMin]])}</div>
       <div>도로 ${tp.amb.distanceKm}km · ${tp.amb.source === 'kakao' ? '카카오맵 최단시간 경로' : '직선거리 기반 추정'}</div><div class="tsub">${esc(tp.ambRoute || '현장 → 병원')}</div>${tp.amb.source === 'kakao' ? '' : `<div class="tsub warn">⚠ ${esc(tp.amb.note || '추정값')}</div>`}</div>`
-    : `<div class="tcard"><div>🚑 구급차</div><b class="big">-</b><div>${esc(tp.text.includes('입력') ? '현장→병원 미지정' : '이동시간을 구하지 못함')}</div></div>`;
+    : `<div class="tcard"><div>🚑 구급차</div><b class="big">-</b><div>${esc(/입력|추가/.test(tp.missing || '') ? '현장→병원 미지정' : '이동시간을 구하지 못함')}</div></div>`;
   el.innerHTML = `<h3>출동 수단 비교 <small>(헬기 vs 구급차 · 목적지까지 소요시간)</small></h3><div class="tcols">${heli}${amb}</div>
     <div class="verdict ${tp.verdict}">${esc(tp.text)}</div>
     ${tp.caution.map((c) => `<p class="tnote">※ ${esc(c)}</p>`).join('')}

@@ -11,8 +11,8 @@ from server.store import store_from_env
 with open(os.path.join(ROOT, 'config.json'), encoding='utf-8') as f:
     CONFIG = json.load(f)
 # 모듈 전역: 같은 인스턴스가 살아 있는 동안 5분 캐시를 공유한다.
-CLIENT = KmaClient(os.environ.get('KMA_AUTH_KEY', ''), CONFIG)
 STORE = store_from_env()
+CLIENT = KmaClient(os.environ.get('KMA_AUTH_KEY', ''), CONFIG, persist=STORE)
 
 
 class handler(BaseHTTPRequestHandler):

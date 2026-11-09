@@ -12,6 +12,7 @@ MAX_PLACES = 500
 KEY = 'heliwx:notams'
 PLACES_KEY = 'heliwx:places'
 USAGE_KEY = 'heliwx:usage'
+WXCACHE_KEY = 'heliwx:wxcache'
 MAX_USAGE = 50000
 USAGE_SINCE = '2026-11-08'     # 누적 집계 기준일(KST 0시)
 
@@ -132,6 +133,23 @@ class _Ops:
                 'firstDate': min(days) if days else None, 'lastDate': max(days) if days else None,
                 'last7': [{'date': d, 'count': days.get(d, 0)} for d in last7], 'byOverall': by}
 
+    # 기상 자료 직전 수신본(서버리스는 메모리가 유지되지 않으므로 수신 실패 시 대체용으로 공유 저장소에 보관)
+    def hget(self, key, field):
+        return self.hall(key).get(field)
+
+    def wx_save(self, kind, at_iso, items):
+        self.hset(WXCACHE_KEY, kind, json.dumps({'at': at_iso, 'items': items}, ensure_ascii=False, separators=(',', ':')))
+
+    def wx_load(self, kind):
+        raw = self.hget(WXCACHE_KEY, kind)
+        if not raw:
+            return None
+        try:
+            d = json.loads(raw)
+            return d if isinstance(d, dict) and isinstance(d.get('items'), list) and d.get('at') else None
+        except ValueError:
+            return None
+
     # 주요지점
     def places_list(self):
         out = []
@@ -238,6 +256,9 @@ class UpstashStore(_Ops):
     def hall(self, key):
         flat = self._cmd('HGETALL', key) or []
         return dict(zip(flat[0::2], flat[1::2]))
+
+    def hget(self, key, field):
+        return self._cmd('HGET', key, field)
 
     def hset(self, key, field, value):
         self._cmd('HSET', key, field, value)

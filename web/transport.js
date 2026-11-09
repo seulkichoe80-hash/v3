@@ -2,7 +2,8 @@
 export function compareTransport({ prepMin, flightMin, overall, road, closeMin = 5, ambPrepMin = 0, missing = '' }) {
   const heli = { prepMin, flightMin, totalMin: prepMin + flightMin };
   const amb = road && Number.isFinite(road.durationMin) ? { prepMin: ambPrepMin, roadMin: road.durationMin, totalMin: ambPrepMin + road.durationMin, distanceKm: road.distanceKm, source: road.source, note: road.note || '' } : null;
-  const out = { heli, amb, diffMin: amb ? amb.totalMin - heli.totalMin : null, verdict: 'NONE', text: '', caution: [] };
+  const out = { heli, amb, diffMin: amb ? amb.totalMin - heli.totalMin : null, verdict: 'NONE', text: '', caution: [], missing: amb ? '' : (missing || '구급차 이동시간을 구하지 못함') };
+  if (!amb) out.caution.push(out.missing);
   if (overall === 'RED') {
     out.verdict = 'AMBULANCE'; out.text = '헬기는 규정상 비행제한 — 구급차 이송 우선 검토 (제21조)';
   } else if (!amb) {

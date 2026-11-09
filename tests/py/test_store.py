@@ -43,11 +43,19 @@ class FakeRedis:
             flat = []
             for k, v in self.h.items(): flat += [k, v]
             return json.dumps({'result': flat})
+        if op == 'HGET': return json.dumps({'result': self.h.get(cmd[2])})
         if op == 'HDEL': self.h.pop(cmd[2], None); return json.dumps({'result': 1})
         raise AssertionError(cmd)
 
 class TUpstash(Contract, unittest.TestCase):
     def make(self): return UpstashStore('https://x.upstash.io', 'TKN', post=FakeRedis())
+
+class TWx(unittest.TestCase):
+    def test_wx_roundtrip_upstash_and_memory(self):
+        for s in (UpstashStore('https://x.upstash.io', 'TKN', post=FakeRedis()), MemoryStore()):
+            self.assertIsNone(s.wx_load('aws'))
+            s.wx_save('aws', '2026-11-09T12:00:00Z', [{'stn': '1', 'name': '가나'}])
+            d = s.wx_load('aws'); self.assertEqual((d['at'], d['items'][0]['name']), ('2026-11-09T12:00:00Z', '가나'))
 
 class TEnv(unittest.TestCase):
     def test_env_selection(self):

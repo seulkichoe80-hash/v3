@@ -157,6 +157,24 @@ class SigwxTmfc(unittest.TestCase):
         self.assertEqual(r['items'], []); self.assertIn('500', r['error'])
 
 
+class PersistTest(unittest.TestCase):
+    def test_fallback_to_saved_when_fetch_fails(self):
+        from server.store import MemoryStore
+        store = MemoryStore(); clock = Clock()
+        ok = KmaClient(KEY, CONFIG, fetch=mock_fetch, now=clock, persist=store).get('lightning')
+        self.assertFalse(ok.get('error'))
+        clock.t += timedelta(minutes=12)
+        def dead(url, timeout=8): raise TimeoutError('The read operation timed out')
+        r = KmaClient(KEY, CONFIG, fetch=dead, now=clock, persist=store).get('lightning')   # 새 인스턴스(콜드스타트 상황)
+        self.assertTrue(r['stale']); self.assertEqual(r['ageMin'], 12); self.assertIn('TimeoutError', r['error'])
+        self.assertEqual(r['items'], ok['items'])
+    def test_nothing_saved_still_errors(self):
+        from server.store import MemoryStore
+        def dead(url, timeout=8): raise TimeoutError('x')
+        r = KmaClient(KEY, CONFIG, fetch=dead, now=Clock(), persist=MemoryStore()).get('lightning')
+        self.assertEqual(r['items'], []); self.assertIn('TimeoutError', r['error'])
+
+
 class RetryTest(unittest.TestCase):
     def test_timeout_retried_once(self):
         calls = {'n': 0}
