@@ -280,7 +280,7 @@ function buildReport(r, input) {
   const { isNight, isSea } = input;
   const names = r.points.map((p, i) => (i > 0 && i < r.points.length - 1 ? '(경유)' : '') + p.name).join('→');
   const stay = r.totalStayMin ? `체류 ${r.totalStayMin}분 포함, ` : '';
-  const parts = [`[하늘길119 운항판단] ${names} ${r.distanceKm}km/${r.durationMin}분(${stay}도착 ${fmtKst(r.arriveUtc)})`,
+  const parts = [`[재난하늘119 출동판단] ${names} ${r.distanceKm}km/${r.durationMin}분(${stay}도착 ${fmtKst(r.arriveUtc)})`,
     `종합: ${GRADE_TEXT[r.overall]}${r.overallNote ? ' (' + r.overallNote + ')' : ''}`,
     `적용기준 ${isNight ? '야간' : '주간'}·${isSea ? '해상' : '육상'} 시정 ${r.limits.visM}m·운고 ${r.limits.ceilFt}ft`];
   const ds = r.sun[r.sun.length - 1];

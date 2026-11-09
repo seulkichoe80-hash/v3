@@ -651,7 +651,7 @@ async function downloadUsage() {
   if (!r.ok) { alert('내려받지 못했습니다 (' + r.status + ')'); return; }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(await r.blob());
-  a.download = `하늘길119-공용누적이력-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `재난하늘119-공용누적이력-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
 }
 function transportLine(tp) {
@@ -703,7 +703,7 @@ function downloadHistory() {
   const csv = ['시각(KST),출발,경유지,목적지,거리km,종합판정', ...rows.map((r) => [kstStr(r.time, true), r.from, r.via || '', r.to, r.distanceKm, GRADE_TEXT[r.overall] || r.overall].map(cell).join(','))].join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `하늘길119-이력-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `재난하늘119-이력-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
 }
 

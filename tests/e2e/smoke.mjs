@@ -31,7 +31,7 @@ if (!(await page.isChecked('#coord-toggle'))) fail('지도 없음인데 좌표 �
 await page.uncheck('#coord-toggle');
 if (await page.isVisible('#pt-from-coord') || await page.isVisible('#coord-fmt')) fail('좌표 입력을 끄면 숨겨져야 함');
 await page.check('#coord-toggle');
-if ((await page.title()) !== '하늘길119') fail('탭 제목이 하늘길119 아님');
+if ((await page.title()) !== '재난하늘119') fail('탭 제목이 재난하늘119 아님');
 if ((await page.inputValue('#cruise')) !== '120') fail('순항속도 기본값 120 아님');
 await page.uncheck('#coord-toggle');
 if (await page.isVisible('#pt-from-name')) fail('좌표 입력 꺼짐일 때 이름 칸은 숨김이어야 함');

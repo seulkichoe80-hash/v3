@@ -196,7 +196,7 @@ test('일몰 안내는 가장 급한 지점(목적지 도착)을 표시', () => 
     departUtc: new Date('2026-11-08T07:45:00Z'), now: new Date('2026-11-08T07:45:00Z') }));   // KST 16:45 출발, 17:01 도착
   assert.match(r.sunNote, /^목적지 도착 시 일몰 \d+분 전/, r.sunNote);
 });
-test('보고문 머리말은 하늘길119', () => { assert.match(evaluate(base()).reportText, /^\[하늘길119 운항판단\] /); });
+test('보고문 머리말은 재난하늘119', () => { assert.match(evaluate(base()).reportText, /^\[재난하늘119 출동판단\] /); });
 // ---- 저고도 SIGWX ----
 const ice = { kind: 'ICE', label: 'MOD_ICE', issued: '2026-11-08T05:00:00Z', points: [{ lat: 37.50, lon: 126.85 }, { lat: 37.62, lon: 126.85 }, { lat: 37.62, lon: 126.95 }, { lat: 37.50, lon: 126.95 }] };
 test('SIGWX: 경로가 착빙 구역 통과 → 주의', () => {
