@@ -1,6 +1,6 @@
 """HTTP 처리. handle_api()는 로컬 서버(run.py)와 Vercel 함수(api/index.py)가 함께 쓴다."""
 import csv, hmac, json, os
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import parsers as P
 
@@ -61,7 +61,7 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
     path_q = parse_qs(qs)
     if method == 'GET' and path == '/api/client-config':
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
-                           'serverLog': bool(log_path), 'notamShared': notam_store is not None,
+                           'serverLog': bool(log_path), 'notamShared': notam_store is not None, 'usageShared': notam_store is not None,
                            'version': (os.environ.get('VERCEL_GIT_COMMIT_SHA') or 'local')[:7]})
     if method not in ('GET', 'HEAD') and not _same_origin(headers):
         return _json(403, {'error': '허용되지 않은 출처의 요청입니다'})
@@ -92,6 +92,8 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
         return _notams(method, path, body, notam_store)
     if path == '/api/places' or path.startswith('/api/places/'):
         return _places(method, path, body, notam_store)
+    if path == '/api/usage':
+        return _usage(method, path_q, body, notam_store)
     if method == 'GET' and path.startswith('/api/raw/'):
         from .kma import ENDPOINTS
         kind = path[len('/api/raw/'):]
@@ -159,6 +161,46 @@ def _notams(method, path, body, store):
         return _json(400, {'error': str(e)})
     except Exception as e:
         return _json(502, {'error': f'공유 저장소 오류: {type(e).__name__}'})
+
+
+def _usage(method, q, body, store):
+    if store is None:
+        return _json(200, {'shared': False}) if method == 'GET' else _json(200, {'ok': True, 'stored': False})
+    try:
+        if method == 'POST':
+            try:
+                d = json.loads(body[:3000] or b'{}')
+            except ValueError:
+                return _json(400, {'error': 'JSON 형식 오류'})
+            store.usage_add(d)
+            return _json(200, {'ok': True, 'stats': store.usage_stats()})
+        if method == 'GET':
+            if q.get('format', [''])[0] == 'csv':
+                lines = ['시각(KST),출발,경유지,목적지,거리km,종합판정']
+                for r in store.usage_list():
+                    try:
+                        t = datetime.strptime(r['t'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc).astimezone(P.KST).strftime('%Y-%m-%d %H:%M')
+                    except (KeyError, ValueError):
+                        t = ''
+                    lines.append(','.join(_csv_cell(v) for v in [t, r.get('from'), r.get('via'), r.get('to'), r.get('km'), GRADE_KO.get(r.get('overall'), r.get('overall'))]))
+                h = {'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store', **SECURITY_HEADERS}
+                return 200, h, ('\ufeff' + '\r\n'.join(lines)).encode('utf-8')
+            return _json(200, {'shared': True, **store.usage_stats()})
+        return _json(405, {'error': 'method'})
+    except ValueError as e:
+        return _json(400, {'error': str(e)})
+    except Exception as e:
+        return _json(502, {'error': f'공유 저장소 오류: {type(e).__name__}'})
+
+
+GRADE_KO = {'RED': '규정상 비행제한', 'YELLOW': '주의', 'GREEN': '규정상 운항 가능', 'NA': '자료없음'}
+
+
+def _csv_cell(v):
+    s = '' if v is None else str(v)
+    if s[:1] in ('=', '+', '-', '@') and not s.lstrip('-').replace('.', '', 1).isdigit():
+        s = "'" + s
+    return '"' + s.replace('"', '""') + '"'
 
 
 def _places(method, path, body, store):

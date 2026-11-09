@@ -58,7 +58,7 @@ async function init() {
   const cc = await (await fetch('/api/client-config', { cache: 'no-store' })).json();
   state.config = cc.config; state.version = cc.version || '';
   $('ver').textContent = state.version ? `버전 ${state.version}` : '';
-  $('reload-btn').addEventListener('click', () => location.reload()); state.serverLog = cc.serverLog;
+  $('reload-btn').addEventListener('click', () => location.reload()); state.serverLog = cc.serverLog; state.usageShared = !!cc.usageShared;
   if (cc.needsCode) {
     const ok = store.get(CODE_KEY, '') && (await fetch('/api/warn', { headers: { 'X-Access-Code': store.get(CODE_KEY, '') } }).then((r) => r.status !== 401 && r.status !== 429).catch(() => false));
     if (!ok) await askCode();
@@ -76,6 +76,8 @@ async function init() {
   $('sigwx-data-btn').addEventListener('click', () => loadSigwxRaw('data'));
   $('sigwx-help-btn').addEventListener('click', () => loadSigwxRaw('help'));
   showHistoryCount();
+  $('usage-csv').addEventListener('click', downloadUsage);
+  refreshUsage();
   $('cruise').value = cc.config.cruiseKt;
   $('depart').value = kstInputNow();
   const fmt = store.get(FMT_KEY, 'dd'); $('coord-fmt').value = ['dd', 'ddm', 'dms'].includes(fmt) ? fmt : 'dd';
@@ -546,6 +548,7 @@ async function run() {
     const entry = { time: new Date().toISOString(), from: from.name, to: to.name, via: pts.slice(1, -1).map((p) => p.name).join(' / '), distanceKm: result.distanceKm, overall: result.overall };
     store.set(HIST_KEY, [entry, ...store.get(HIST_KEY, [])].slice(0, 5000));
     showHistoryCount();
+    if (state.usageShared) api('/api/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).then((r) => r.ok ? r.json() : null).then((d) => d && d.stats && showUsage(d.stats)).catch(() => {});
     if (state.serverLog) api('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
   } catch (e) {
     $('run-msg').textContent = '오류: ' + e.message + ' — 하단 수동 확인 링크를 이용하세요.';
@@ -601,6 +604,25 @@ function render(r, ctx) {
   $('sigwx-raw-wrap').hidden = false;
 }
 
+async function refreshUsage() {
+  if (!state.usageShared) return;
+  try { const d = await (await api('/api/usage')).json(); if (d.shared) showUsage(d); } catch { /* 누적 표시는 부가 기능 */ }
+}
+function showUsage(u) {
+  $('usage-box').hidden = false; $('usage-chip').hidden = false;
+  $('usage-total').textContent = u.total.toLocaleString('ko-KR'); $('usage-chip-n').textContent = u.total.toLocaleString('ko-KR');
+  $('usage-sub').textContent = u.total ? `· 오늘 ${u.today}건 · 사용일 ${u.activeDays}일 · ${u.firstDate} 부터` : '· 아직 기록 없음';
+  const max = Math.max(1, ...u.last7.map((d) => d.count));
+  $('usage-bars').innerHTML = u.last7.map((d) => `<span class="${d.count ? '' : 'zero'}" style="height:${Math.max(4, Math.round((d.count / max) * 100))}%" title="${esc(d.date)} ${d.count}건"></span>`).join('');
+}
+async function downloadUsage() {
+  const r = await api('/api/usage?format=csv');
+  if (!r.ok) { alert('내려받지 못했습니다 (' + r.status + ')'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(await r.blob());
+  a.download = `하늘길119-공용누적이력-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
 function downloadHistory() {
   const rows = store.get(HIST_KEY, []);

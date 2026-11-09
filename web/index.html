@@ -25,6 +25,7 @@
       <p>기상·NOTAM·경로·일출일몰 종합 · 119항공대 운영 규정 제21조 기준 · 운항관제 조언용 (최종 판단은 통제관·기장)</p>
     </div>
   </div>
+  <div class="usage-chip" id="usage-chip" hidden title="모든 사용자의 누적 조회 건수">누적 <b id="usage-chip-n">0</b>건</div>
   <div class="clock" id="clock" aria-live="off"></div>
 </header>
 
@@ -112,7 +113,12 @@
     <textarea id="report-text" rows="5" readonly></textarea>
     <button id="copy" type="button" class="copy">보고문 복사</button>
     <h3>조회 이력 <small id="history-count"></small></h3>
-    <button id="history-csv" type="button" class="copy">이력 CSV 내려받기</button>
+    <div id="usage-box" class="usage" hidden>
+      <div class="usage-main">전체 사용자 누적 <strong id="usage-total">0</strong>건 <small id="usage-sub"></small></div>
+      <div class="usage-bars" id="usage-bars" aria-label="최근 7일 조회 건수"></div>
+      <button id="usage-csv" type="button" class="copy">공용 누적 이력 CSV 내려받기</button>
+    </div>
+    <button id="history-csv" type="button" class="copy">이 브라우저 이력 CSV 내려받기</button>
   </section>
 </main>
 

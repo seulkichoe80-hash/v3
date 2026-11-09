@@ -11,6 +11,8 @@ MAX_TEXT = 20000
 MAX_PLACES = 500
 KEY = 'heliwx:notams'
 PLACES_KEY = 'heliwx:places'
+USAGE_KEY = 'heliwx:usage'
+MAX_USAGE = 50000
 
 
 def _now():
@@ -60,6 +62,46 @@ class _Ops:
     def delete(self, slot):
         _check(slot)
         self.hdel(KEY, str(slot))
+
+    # 사용 이력(모든 사용자 공용 누적): 개인 식별정보 없이 시각·출발·경유·목적지·거리·판정만 저장
+    def usage_add(self, e):
+        if not isinstance(e, dict):
+            raise ValueError('형식 오류')
+        km = e.get('distanceKm')
+        rec = {'t': _now(), 'from': str(e.get('from', ''))[:50], 'via': str(e.get('via', ''))[:120], 'to': str(e.get('to', ''))[:50],
+               'km': km if isinstance(km, (int, float)) and not isinstance(km, bool) and math.isfinite(km) else None,
+               'overall': str(e.get('overall', ''))[:10]}
+        if not rec['from'] or not rec['to']:
+            raise ValueError('출발·목적지 필요')
+        self.hset(USAGE_KEY, f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}", json.dumps(rec, ensure_ascii=False))
+        return rec
+
+    def usage_list(self):
+        out = []
+        for k, v in self.hall(USAGE_KEY).items():
+            try:
+                out.append(json.loads(v))
+            except ValueError:
+                continue
+        return sorted(out, key=lambda r: r.get('t', ''))[-MAX_USAGE:]
+
+    def usage_stats(self, rows=None):
+        from datetime import timedelta
+        rows = self.usage_list() if rows is None else rows
+        kst = timezone(timedelta(hours=9))
+        days, by = {}, {}
+        for r in rows:
+            try:
+                d = datetime.strptime(r['t'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc).astimezone(kst).strftime('%Y-%m-%d')
+            except (KeyError, ValueError):
+                continue
+            days[d] = days.get(d, 0) + 1
+            by[r.get('overall', '')] = by.get(r.get('overall', ''), 0) + 1
+        now = datetime.now(kst)
+        last7 = [(now - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
+        return {'total': sum(days.values()), 'today': days.get(now.strftime('%Y-%m-%d'), 0), 'activeDays': len(days),
+                'firstDate': min(days) if days else None, 'lastDate': max(days) if days else None,
+                'last7': [{'date': d, 'count': days.get(d, 0)} for d in last7], 'byOverall': by}
 
     # 주요지점
     def places_list(self):

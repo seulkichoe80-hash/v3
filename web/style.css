@@ -229,3 +229,10 @@ table.kv td { white-space: normal; }
 .stale[hidden] { display: none; }
 .stale button { margin-left: 8px; padding: 4px 10px; border: 1px solid var(--yellow); background: #fff; border-radius: 6px; font-weight: 700; cursor: pointer; }
 .ver { font-size: 11px; color: var(--muted); }
+
+.usage-chip { font-size: 13px; color: #dfe8f1; background: rgba(255,255,255,.12); border-radius: 12px; padding: 3px 10px; white-space: nowrap; margin-left: auto; margin-right: 12px; }
+.usage { border: 1px solid var(--line, #d5dde6); border-radius: 8px; padding: 10px 12px; margin: 6px 0 10px; }
+.usage-main strong { font-size: 22px; }
+.usage-bars { display: flex; align-items: flex-end; gap: 4px; height: 44px; margin: 8px 0; }
+.usage-bars span { flex: 1; background: #2f6fa8; border-radius: 2px 2px 0 0; min-height: 2px; position: relative; }
+.usage-bars span.zero { background: #cfd8e2; }
