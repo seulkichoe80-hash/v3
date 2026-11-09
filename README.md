@@ -145,3 +145,4 @@ node tests/e2e/sigwx.mjs                   # 저고도 SIGWX 전체 흐름 (실�
 node tests/e2e/stale.mjs                   # 낡은 화면 감지 (서버 버전이 바뀌면 새로고침 안내)
 ```
 
+
