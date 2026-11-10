@@ -34,6 +34,12 @@
   <section class="panel input" aria-labelledby="h-input">
     <h2 id="h-input">임무 입력</h2>
 
+    <div class="sheet-tabs" role="tablist" aria-label="입력 시트">
+      <button type="button" role="tab" class="sheet-tab on" id="sheet-tab-1" data-sheet="1" aria-selected="true" aria-controls="sheet-1">① 임무 입력</button>
+      <button type="button" role="tab" class="sheet-tab" id="places-sum" data-sheet="2" aria-selected="false" aria-controls="sheet-2">② ★주요지점 <small id="tab-places-n"></small></button>
+      <button type="button" role="tab" class="sheet-tab" id="sheet-tab-3" data-sheet="3" aria-selected="false" aria-controls="sheet-3">③ 항공고시보 <small id="tab-notam-n"></small></button>
+    </div>
+    <div class="sheet" id="sheet-1" role="tabpanel" aria-labelledby="sheet-tab-1">
     <label class="inline toggle"><input type="checkbox" id="coord-toggle"> 좌표 직접 입력</label>
     <label class="inline toggle"><input type="checkbox" id="map-click-on" checked> 지도 클릭으로 지점 지정 <small>(판단 실행 후 자동으로 꺼짐)</small></label>
     <label class="fmt coord-only">좌표 형식
@@ -52,8 +58,19 @@
       <div class="loc" id="amb-loc"></div>
       <p class="hint">헬기는 위 경로(항공대 → 현장 → 병원)로, 구급차는 이 칸의 현장 → 병원으로 비교합니다. 검색·★주요지점·좌표 직접 입력 가능.</p>
     </fieldset>
-    <details id="places-box" class="places">
-      <summary id="places-sum">★ 주요지점 <small id="places-count"></small></summary>
+    <div class="grid2">
+      <label>출발 예정시각(KST)<input id="depart" type="datetime-local"></label>
+      <label>순항속도(kt)<input id="cruise" type="number" min="40" max="200" step="5"></label>
+      <label>접수→이륙(분)<input id="prep" type="number" min="0" max="120" step="1"><small>헬기 출동 준비(기본 15분)</small></label>
+      <label>주간/야간<select id="daynight"><option value="auto">자동</option><option value="day">주간</option><option value="night">야간</option></select><small id="daynight-auto"></small></label>
+      <label>육상/해상<select id="landsea"><option value="auto">자동</option><option value="land">육상</option><option value="sea">해상</option></select><small id="landsea-auto"></small></label>
+    </div>
+
+    </div>
+    <div class="sheet" id="sheet-2" role="tabpanel" aria-labelledby="places-sum" hidden>
+    <div id="places-box" class="places">
+      <p class="sheet-title">★ 주요지점 <small id="places-count"></small></p>
+      <p class="hint" id="place-target"></p>
       <input id="place-q" type="search" placeholder="주요지점 검색 (이름·메모)" autocomplete="off">
       <ul id="place-list" class="place-list"></ul>
       <div class="place-add">
@@ -65,22 +82,18 @@
         <button id="place-add" type="button" class="mini">추가</button> <small id="place-msg" class="hint"></small>
       </div>
       <p class="hint" id="places-mode"></p>
-    </details>
-
-    <div class="grid2">
-      <label>출발 예정시각(KST)<input id="depart" type="datetime-local"></label>
-      <label>순항속도(kt)<input id="cruise" type="number" min="40" max="200" step="5"></label>
-      <label>접수→이륙(분)<input id="prep" type="number" min="0" max="120" step="1"><small>헬기 출동 준비(기본 15분)</small></label>
-      <label>주간/야간<select id="daynight"><option value="auto">자동</option><option value="day">주간</option><option value="night">야간</option></select><small id="daynight-auto"></small></label>
-      <label>육상/해상<select id="landsea"><option value="auto">자동</option><option value="land">육상</option><option value="sea">해상</option></select><small id="landsea-auto"></small></label>
     </div>
 
+    </div>
+    <div class="sheet" id="sheet-3" role="tabpanel" aria-labelledby="sheet-tab-3" hidden>
     <div class="notam-head"><b>항공고시보(NOTAM)</b> <small>D 시리즈만 확인</small>
       <button id="notam-reload" type="button" class="mini" title="저장된 칸 다시 불러오기">↻ 새로고침</button></div>
     <p class="hint" id="notam-mode"></p>
     <div id="notam-slots"></div>
     <button id="notam-add" type="button" class="ghost">+ 칸 추가</button>
     <a class="ext" href="https://aim.koca.go.kr/xNotam/index.do?type=search2&amp;language=ko_KR" target="_blank" rel="noopener">xNotam 열기 ↗</a>
+
+    </div>
 
     <button id="run" class="run" type="button">판단 실행</button>
     <p class="hint" id="run-msg" role="status"></p>

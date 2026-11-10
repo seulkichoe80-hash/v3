@@ -24,6 +24,7 @@ if (await page.isVisible('#map-off')) fail('가짜 SDK인데 지도 실패로 �
 await page.click('#places-sum');
 await page.fill('#place-name', '아주대 헬리패드'); await page.fill('#place-coord', '37.2795, 127.0470'); await page.click('#place-add');
 await page.waitForFunction(() => /아주대 헬리패드/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('주요지점 추가 안 됨'));
+await page.click('#sheet-tab-1');
 await page.fill('#pt-from-q', '아주대'); await page.dispatchEvent('#pt-from-q', 'input');
 await page.waitForFunction(() => /아주대학교병원/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 }).catch(() => fail('카카오 장소검색 결과가 목록에 안 나옴'));
 if (!/★\s*아주대 헬리패드/.test(await page.textContent('#pt-from-results'))) fail('주요지점이 검색 목록에 같이 안 나옴');

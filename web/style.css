@@ -267,3 +267,13 @@ table.kv td { white-space: normal; }
 .amb-line .results { min-width: 250px; }
 .amb-line .search:nth-of-type(2) .results, .amb-line .search + .arrow + .search .results { left: auto; right: 0; }
 .transport .tsub.warn { color: #9a1b14; font-weight: 700; }
+
+/* 엑셀 시트 탭 느낌의 입력 화면 구분 */
+.sheet-tabs { display: flex; gap: 2px; margin: 8px 0 0; border-bottom: 3px solid #1d6f42; }
+.sheet-tab { flex: 1; border: 1px solid #b9c7bd; border-bottom: 0; background: #e8efe9; color: #26412f; padding: 8px 6px; font-size: 13.5px; font-weight: 700; cursor: pointer; border-radius: 8px 8px 0 0; white-space: nowrap; }
+.sheet-tab small { font-weight: 600; color: #4b6b57; }
+.sheet-tab.on { background: #fff; color: #1d6f42; box-shadow: 0 -3px 0 #1d6f42 inset; }
+.sheet { padding-top: 10px; }
+.sheet[hidden] { display: none; }
+.sheet-title { margin: 0 0 6px; font-weight: 700; color: var(--accent); }
+@media (max-width: 760px) { .sheet-tab { font-size: 12.5px; padding: 8px 2px; } }

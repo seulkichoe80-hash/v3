@@ -79,6 +79,7 @@ async function init() {
   showHistoryCount();
   $('usage-csv').addEventListener('click', downloadUsage);
   wireAmb();
+  setupSheets();
   refreshUsage();
   $('cruise').value = cc.config.cruiseKt; $('prep').value = (cc.config.dispatch || {}).heliPrepMin ?? 15;
   $('depart').value = kstInputNow();
@@ -322,13 +323,13 @@ function updatePlaceFrom() {
 function renderPlaces() {
   const q = $('place-q').value.trim().toLowerCase();
   const items = state.favs.filter((p) => !q || (p.name + ' ' + (p.memo || '')).toLowerCase().includes(q));
-  $('places-count').textContent = `(${state.favs.length})`;
+  $('places-count').textContent = `(${state.favs.length})`; updateTabCounts();
   $('place-list').innerHTML = items.length ? items.map((p) => `<li data-id="${esc(p.id)}"><button type="button" class="pick" title="선택된 지점(이 지점)에 넣기">★ ${esc(p.name)}
       <small>${esc(formatCoord(p, fmtNow()))}${p.memo ? ' · ' + esc(p.memo) : ''}</small></button><button type="button" class="mini del">삭제</button></li>`).join('')
     : `<li><small>${state.favs.length ? '검색 결과 없음' : '등록된 주요지점이 없습니다'}</small></li>`;
   $('place-list').querySelectorAll('li[data-id]').forEach((li) => {
     const p = state.favs.find((x) => x.id === li.dataset.id);
-    li.querySelector('.pick').addEventListener('click', () => setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }));
+    li.querySelector('.pick').addEventListener('click', () => { setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }); showSheet(1); });
     li.querySelector('.del').addEventListener('click', async () => {
       if (!confirm(`주요지점 "${p.name}"을(를) 삭제할까요?${state.placesShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
       try { await deletePlace(p.id); } catch (e) { alert('삭제 실패: ' + e.message); }
@@ -420,17 +421,17 @@ function renderSlots() {
       $(`notam-${i}-status`).textContent = dirty ? '· 저장 안 됨' : cur.savedAt ? `· 저장됨 ${kstStr(cur.savedAt, true)}` : '';
       ta.closest('.nslot').classList.toggle('dirty', dirty);
     };
-    ta.addEventListener('input', () => { state.slots[i] = { ...(state.slots[i] || {}), text: ta.value }; refresh(); syncMapNotams(); });
+    ta.addEventListener('input', () => { state.slots[i] = { ...(state.slots[i] || {}), text: ta.value }; refresh(); syncMapNotams(); updateTabCounts(); });
     $(`notam-${i}-save`).addEventListener('click', () => saveSlot(i, ta.value).then(refresh));
     $(`notam-${i}-del`).addEventListener('click', () => {
       if (!ta.value.trim() && !(state.slots[i] || {}).savedText) return;
       if (!confirm(`${CIRCLED[i - 1]}번 칸을 삭제할까요?${state.notamShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
-      deleteSlot(i).then(() => { ta.value = ''; refresh(); syncMapNotams(); });
+      deleteSlot(i).then(() => { ta.value = ''; refresh(); syncMapNotams(); updateTabCounts(); });
     });
     refresh();
   }
   $('notam-add').disabled = state.slotCount >= MAX_SLOTS;
-  syncMapNotams();
+  syncMapNotams(); updateTabCounts();
 }
 
 async function saveSlot(i, text) {
@@ -708,6 +709,26 @@ function showAmb() {
 function ambPoints(pts) {
   const via1 = pts.length > 2 ? pts[1] : null, dest = pts.length > 1 ? pts[pts.length - 1] : null;
   return { from: state.amb.from || via1, to: state.amb.to || dest };
+}
+// ---------- 입력 시트(엑셀 시트 탭처럼 ①임무 입력 ②주요지점 ③항공고시보 전환) ----------
+const SHEET_KEY = 'heliwx.sheet';
+function showSheet(n) {
+  n = String(n);
+  document.querySelectorAll('.sheet-tab').forEach((b) => { const on = b.dataset.sheet === n; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  document.querySelectorAll('.sheet').forEach((d) => { d.hidden = d.id !== 'sheet-' + n; });
+  try { sessionStorage.setItem(SHEET_KEY, n); } catch { /* 저장 불가여도 동작 */ }
+  if (n === '2') updatePlaceTarget();
+}
+function setupSheets() {
+  document.querySelectorAll('.sheet-tab').forEach((b) => b.addEventListener('click', () => showSheet(b.dataset.sheet)));
+  let n = '1'; try { n = sessionStorage.getItem(SHEET_KEY) || '1'; } catch { /* 무시 */ }
+  showSheet(['1', '2', '3'].includes(n) ? n : '1');
+}
+function updatePlaceTarget() { if ($('place-target')) $('place-target').textContent = `목록에서 고르면 ①시트의 "${roleLabel(state.clickTarget)}"에 들어갑니다(① 시트에서 "지도 클릭·주요지점 → 이 지점"으로 바꿀 수 있음)`; }
+function updateTabCounts() {
+  const np = state.favs.length, nn = Array.from({ length: state.slotCount }, (_, k) => ($(`notam-${k + 1}`)?.value || '').trim()).filter(Boolean).length;
+  if ($('tab-places-n')) $('tab-places-n').textContent = np ? `(${np})` : '';
+  if ($('tab-notam-n')) $('tab-notam-n').textContent = nn ? `(${nn})` : '';
 }
 function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM (${(nm * 1.852).toFixed(1)}km)`; }
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }

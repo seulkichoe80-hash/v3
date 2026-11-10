@@ -19,6 +19,7 @@ await page.press('#pt-from-q', 'Enter');
 await page.fill('#pt-to-q', '정부대전'); await page.dispatchEvent('#pt-to-q', 'input');
 await page.waitForFunction(() => /정부대전청사/.test(document.querySelector('#pt-to-results').textContent), null, { timeout: 5000 });
 await page.click('#pt-to-results li:has-text("정부대전청사")');
+await page.click('#sheet-tab-3');
 if (!(await page.isVisible('#notam-1'))) await page.click('#notam-1-sum');
 await page.fill('#notam-1', readFileSync(ROOT + 'tests/fixtures/notam_d2840.txt', 'utf8'));
 // ① 판단 실행 전에도 NOTAM이 지도에 그려진다(빨간 원+라벨)
@@ -42,6 +43,6 @@ if (!/📍/.test(await page.textContent('#notam-list')) || !/반경 [\d.]+NM/.te
 if (await page.isChecked('#map-click-on')) fail('판단 실행 후 지도 클릭 지정이 꺼져 있어야 함');
 const locked = await toLoc(); await clickMap(); await page.waitForTimeout(200);
 if ((await toLoc()) !== locked) fail('판단 실행 후에도 지도 클릭으로 목적지가 바뀜');
-await page.check('#map-click-on'); await clickMap(36.2, 128.3); await page.waitForTimeout(200);
+await page.click('#sheet-tab-1'); await page.check('#map-click-on'); await clickMap(36.2, 128.3); await page.waitForTimeout(200);
 if ((await toLoc()) === locked) fail('잠금을 해제하면 다시 지도 클릭으로 바뀌어야 함');
 console.log('PASS notammap'); await browser.close(); srv.kill();

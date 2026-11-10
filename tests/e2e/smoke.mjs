@@ -44,16 +44,22 @@ await page.click('#place-add');
 await page.waitForFunction(() => /테스트헬리패드/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('주요지점 추가 안 됨'));
 await page.click('#place-list li:has-text("테스트헬리패드") .pick');
 if ((await page.inputValue('#pt-to-name')) !== '테스트헬리패드') fail('주요지점 선택이 목적지에 반영 안 됨');
+if (!(await page.isVisible('#sheet-1')) || (await page.isVisible('#sheet-2'))) fail('주요지점을 고르면 ①시트로 돌아와야 함');
+if (!/\(\d+\)/.test(await page.textContent('#places-sum'))) fail('②시트 탭에 주요지점 개수가 없음');
 await page.fill('#pt-from-q', '헬리'); await page.dispatchEvent('#pt-from-q', 'input');
 await page.waitForFunction(() => /★\s*테스트헬리패드/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 }).catch(() => fail('카드 검색에 주요지점 안 나옴'));
 await page.press('#pt-from-q', 'Enter');
 if ((await page.inputValue('#pt-from-name')) !== '테스트헬리패드') fail('카드 검색 결과 선택 안 됨');
+await page.click('#places-sum');
+if (!(await page.isVisible('#place-q')) || (await page.isVisible('#pt-from-q'))) fail('②시트에서는 주요지점만 보여야 함');
+if (!/①시트/.test(await page.textContent('#place-target'))) fail('②시트에 선택 대상 안내가 없음');
 await page.selectOption('#place-from', 'from');
 if ((await page.inputValue('#place-name')) !== '테스트헬리패드' || !/37\.6/.test(await page.inputValue('#place-coord'))) fail('현재 지점 가져오기 안 됨');
 await page.fill('#place-name', '카드저장지점'); await page.click('#place-add');
 await page.waitForFunction(() => /카드저장지점/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('카드 ★저장 안 됨'));
 page.once('dialog', (d) => d.accept()); await page.click('#place-list li:has-text("카드저장지점") .del');
 await page.waitForFunction(() => !/카드저장지점/.test(document.querySelector('#place-list').textContent), null, { timeout: 5000 }).catch(() => fail('주요지점 삭제 안 됨'));
+await page.click('#sheet-tab-1');
 // 도·분·초 형식으로 출발지, 십진수로 목적지, 경유지 1개(도·분) 추가
 await page.selectOption('#coord-fmt', 'dms');
 await page.fill('#pt-from-name', '김포'); await page.fill('#pt-from-coord', `37°33'30"N 126°47'26"E`); await page.dispatchEvent('#pt-from-coord', 'change');
@@ -72,6 +78,7 @@ await page.fill('#pt-via1-stay', '10');
 await page.selectOption('#coord-fmt', 'dd');
 await page.fill('#pt-to-name', '서울역'); await page.fill('#pt-to-coord', '37.5547, 126.9707'); await page.dispatchEvent('#pt-to-coord', 'change');
 // NOTAM 칸: 1번 저장, 2번 저장 후 삭제, 새로고침 후 유지 확인
+await page.click('#sheet-tab-3');
 await page.waitForSelector('#notam-1', { state: 'attached', timeout: 5000 }).catch(() => fail('NOTAM 1번 칸 없음'));
 if ((await page.locator('.nslot').count()) !== 2) fail('NOTAM 기본 2칸 아님');
 if (await page.isVisible('#notam-1')) fail('NOTAM 칸은 기본 닫힘이어야 함');
@@ -110,6 +117,7 @@ const crit = await page.textContent('#criteria');
 if (!/규정/.test(crit) || !/시스템 설정값/.test(crit) || !/3200m/.test(crit) || !/1\.5배/.test(crit)) fail('판정 기준표 내용 이상');
 // 제22조 확인표: 야간 또는 해상(지도 없으면 엄격 기준=해상)일 때 표시
 if (!(await page.textContent('#art22')).includes('제22조④')) fail('해상 제22조 확인표 없음');
+await page.click('#sheet-tab-1');
 await page.selectOption('#landsea', 'land'); await page.selectOption('#daynight', 'day'); await page.click('#run');
 await page.waitForFunction(() => document.querySelector('#art22').textContent.trim() === '', null, { timeout: 5000 }).catch(() => fail('주간·육상이면 제22조 확인표가 비어야 함'));
 await page.selectOption('#daynight', 'night'); await page.click('#run');
