@@ -1,4 +1,4 @@
-// 주요지점 100곳: 처음 30곳만 보이고, 종류 칩·검색·더 보기·최근 사용·종류 변경이 동작한다
+// 주요지점 100곳: 처음 30곳만 보이고, 종류 칩·검색·더 보기·종류 변경이 동작한다
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 const require = createRequire(import.meta.url);
@@ -26,10 +26,10 @@ await page.click('#place-chips .chip[data-cat="기타"]'); if ((await n()) !== 2
 await page.click('#place-chips .chip[data-cat="전체"]');
 await page.fill('#place-q', '옥상'); if ((await n()) !== 10) fail('메모 검색 10곳: ' + await n());
 await page.fill('#place-q', '지점042'); if ((await n()) !== 1) fail('이름 검색 1곳');
-// 선택 → ①시트로 이동, 최근 사용에 올라옴
+// 선택 → ①시트로 이동(최근 사용 목록은 없음)
 await page.click('#place-list li .pick'); if (!(await page.isVisible('#sheet-1'))) fail('선택 뒤 ①시트로 와야 함');
 await page.click('#places-sum'); await page.fill('#place-q', '');
-if (!(await page.isVisible('#place-recent')) || !/지점042/.test(await page.textContent('#place-recent'))) fail('최근 사용에 방금 고른 지점이 없음');
+if (await page.locator('#place-recent').count()) fail('최근 사용 목록은 없어야 함');
 // 종류 변경이 저장된다(새로고침 후에도 유지)
 await page.fill('#place-q', '지점001'); await page.selectOption('#place-list li .catsel', '병원');
 await page.waitForTimeout(400); await page.reload(); await page.waitForSelector('#map-off:not([hidden])'); await page.click('#places-sum');

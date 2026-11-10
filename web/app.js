@@ -335,10 +335,8 @@ function updatePlaceFrom() {
   if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 
-const PLACE_CATS = ['항공대', '병원', '헬리패드', '기타'], RECENT_KEY = 'heliwx.recentPlaces', PLACE_PAGE = 30;
+const PLACE_CATS = ['항공대', '병원', '헬리패드', '기타'], PLACE_PAGE = 30;
 const placeCat = (p) => (PLACE_CATS.includes(p.cat) ? p.cat : '기타');
-function recentIds() { return store.get(RECENT_KEY, []); }
-function pushRecent(id) { store.set(RECENT_KEY, [id, ...recentIds().filter((x) => x !== id)].slice(0, 5)); }
 function placeRow(p) {
   return `<li data-id="${esc(p.id)}"><button type="button" class="pick" title="선택된 지점에 넣기">${esc(p.name)}
       <small>${esc(formatCoord(p, fmtNow()))}${p.memo ? ' · ' + esc(p.memo) : ''}</small></button>
@@ -353,16 +351,13 @@ function renderPlaces() {
   const all = state.favs.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   const items = all.filter((p) => (!q || (p.name + ' ' + (p.memo || '')).toLowerCase().includes(q)) && (cat === '전체' || placeCat(p) === cat));
   const limit = state.placeLimit || PLACE_PAGE, shown = items.slice(0, limit);
-  const recent = (!q && cat === '전체') ? recentIds().map((id) => state.favs.find((x) => x.id === id)).filter(Boolean) : [];
-  $('place-recent-title').hidden = $('place-recent').hidden = !recent.length;
-  $('place-recent').innerHTML = recent.map(placeRow).join('');
   $('place-list').innerHTML = shown.length ? shown.map(placeRow).join('')
     : `<li><small>${state.favs.length ? '해당하는 주요지점이 없습니다' : '등록된 주요지점이 없습니다'}</small></li>`;
   $('place-more').hidden = items.length <= limit;
   $('place-more').textContent = `더 보기 (${items.length - limit}곳 더)`;
-  document.querySelectorAll('#place-recent li[data-id], #place-list li[data-id]').forEach((li) => {
+  document.querySelectorAll('#place-list li[data-id]').forEach((li) => {
     const p = state.favs.find((x) => x.id === li.dataset.id);
-    li.querySelector('.pick').addEventListener('click', () => { setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }); pushRecent(p.id); showSheet(1); renderPlaces(); });
+    li.querySelector('.pick').addEventListener('click', () => { setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }); showSheet(1); });
     li.querySelector('.catsel').addEventListener('change', async (e) => { try { await savePlace({ ...p, cat: e.target.value }); } catch (err) { alert('종류 변경 실패: ' + err.message); } });
     li.querySelector('.del').addEventListener('click', async () => {
       if (!confirm(`주요지점 "${p.name}"을(를) 삭제할까요?${state.placesShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
