@@ -117,7 +117,8 @@ if (!/\d+kt\)/.test(await page.textContent('#wind')) && !/바람 정보 없음|�
 await page.click('#criteria-wrap summary');
 const crit = await page.textContent('#criteria');
 if (!/규정/.test(crit) || !/시스템 설정값/.test(crit) || !/3200m/.test(crit) || !/1\.5배/.test(crit)) fail('판정 기준표 내용 이상');
-// 제22조 확인표: 야간 또는 해상(지도 없으면 엄격 기준=해상)일 때 표시
+// 제22조 확인표: 야간 또는 해상일 때 표시(내륙 경로는 자동 판별이 육상이므로 해상을 직접 선택해 확인)
+await page.click('#sheet-tab-1'); await page.selectOption('#landsea', 'sea'); await page.click('#run'); await page.waitForFunction(() => /판단 완료/.test(document.querySelector('#run-msg').textContent));
 if (!(await page.textContent('#art22')).includes('제22조④')) fail('해상 제22조 확인표 없음');
 await page.click('#sheet-tab-1');
 await page.selectOption('#landsea', 'land'); await page.selectOption('#daynight', 'day'); await page.click('#run');
@@ -138,7 +139,7 @@ await page.click('#sigwx-help-btn');
 await page.waitForFunction(() => document.querySelector('#sigwx-raw').dataset.mode === 'help' && document.querySelector('#sigwx-raw').textContent.length > 5, null, { timeout: 5000 }).catch(() => fail('SIGWX API 설명문 보기 안 됨'));
 if ((await page.locator('#legs tr').count()) !== 2) fail('구간표 2행 아님');
 if ((await page.locator('#rows tr').count()) < 6) fail('근거 표 행 부족');
-if (!(await page.textContent('#landsea-auto')).includes('해상 기준')) fail('지도 없음 시 해상(엄격) 기준 안내 없음');
+if (!(await page.textContent('#landsea-auto')).includes('자동:')) fail('육상/해상 자동 판별 표시 없음');
 await page.fill('#cruise', '0'); await page.dispatchEvent('#cruise', 'change'); await page.click('#run');
 await page.waitForFunction(() => document.querySelector('#run-msg').textContent.includes('판단 완료'), null, { timeout: 5000 }).catch(() => fail('순항속도 0 입력 시 멈춤'));
 const hist = await page.evaluate(() => JSON.parse(localStorage.getItem('heliwx.history') || '[]'));

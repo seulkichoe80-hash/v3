@@ -56,6 +56,13 @@ if (await page.isVisible('#help-panel')) fail('사용법은 기본 숨김'); awa
 await set('#pt-from-coord', '36.50, 127.25'); await set('#pt-to-coord', '37.50, 127.05'); await page.click('#run'); await ran();
 await page.clock.fastForward(21 * 60 * 1000); await page.waitForTimeout(100);
 if (!(await page.isVisible('#old-banner')) || !/분 전/.test(await page.textContent('#old-banner'))) fail('오래된 판단 안내가 안 뜸');
+// 해상 자동 판별: 울릉도 → 포항 영일대는 바다 위를 지나므로 해상 기준(4800m·1500ft), 내륙은 육상
+await set('#pt-from-name', '울릉도'); await set('#pt-from-coord', '37.5062, 130.8604'); await set('#pt-to-name', '영일대'); await set('#pt-to-coord', '36.0551, 129.3782');
+await page.click('#run'); await ran();
+if (!/해상/.test(await page.textContent('#landsea-auto')) || !/해상 4800m\/1500ft/.test(await page.textContent('#route-info'))) fail('울릉도→포항이 해상으로 판별되지 않음: ' + await page.textContent('#route-info'));
+await set('#pt-from-name', '대전'); await set('#pt-from-coord', '36.35, 127.38'); await set('#pt-to-name', '수원'); await set('#pt-to-coord', '37.279, 127.0466');
+await page.click('#run'); await ran();
+if (!/육상/.test(await page.textContent('#landsea-auto'))) fail('내륙 경로가 육상으로 판별되지 않음');
 // 주요지점 CSV: 불러오기(잘못된 줄 건너뜀, 같은 이름 갱신) → 내려받기
 await page.click('#places-sum');
 const csv = '\ufeff이름,종류,위도,경도,메모\r\n가나병원,병원,37.5,127.0,"옥상, 헬리패드"\r\n다라항공대,항공대,36.5,127.2,\r\n오류줄,병원,abc,127,\r\n가나병원,헬리패드,37.6,127.1,수정\r\n';

@@ -1,6 +1,7 @@
 // 화면 로직: 입력 → 자료 수집(/api/*) → 판정(judge.js) → 표시. 카카오맵이 없으면 좌표 직접 입력으로 계속 동작.
 import { distanceKm, sampleRouteMulti, isNightDuringRoute, routeLengthKm, KM_PER_NM } from './geo.js';
 import { compareTransport } from './transport.js';
+import { routeOverSea } from './landmask.js';
 import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
 import { evaluate, GRADE_TEXT, dirText, SIGWX_TEXT } from './judge.js';
@@ -706,16 +707,17 @@ async function run() {
     const { dep, arr } = flightTimes(pts);
     const dn = $('daynight').value, ls = $('landsea').value;
     const isNight = dn === 'auto' ? isNightDuringRoute(pts, dep, arr) : dn === 'night';
-    const seaSuggest = rr.available && rr.seaPoints > 0;
-    // 판별 불가 시 더 엄격한 해상 기준을 적용한다
-    const isSea = ls === 'auto' ? (rr.available ? seaSuggest : true) : ls === 'sea';
-    $('landsea-auto').textContent = rr.available ? `자동: ${seaSuggest ? '해상 구간 포함' : '육상'}` : '자동 판별 불가(지도 없음) → 해상 기준(엄격) 적용, 육상이면 직접 선택';
-    if (!rr.available) warns.push('카카오맵 없음 — 특보구역 매칭·해상 자동판별 생략(특보 직접 확인)');
+    // 해상 자동 판별: 카카오 행정구역 조회와 내장 해안선(바다 위 점)을 합쳐 하나라도 바다면 해상(더 엄격한 기준)
+    const mask = routeOverSea(pts);
+    const seaSuggest = mask.sea || (rr.available && rr.seaPoints > 0);
+    const isSea = ls === 'auto' ? seaSuggest : ls === 'sea';
+    $('landsea-auto').textContent = `자동: ${seaSuggest ? '해상 구간 포함' : '육상'}`;
+    if (!rr.available) warns.push('카카오맵 없음 — 특보구역 매칭 생략(특보 직접 확인), 해상 판별은 내장 해안선 기준');
 
     const text = notamText();
     const result = evaluate({
       points: pts, departUtc: dep, cruiseKt: cruiseKt(), isNight, isSea, data, dataStatus,
-      regionsAvailable: rr.available, seaRoute: seaSuggest || (isSea && !rr.available),
+      regionsAvailable: rr.available, seaRoute: seaSuggest,
       notams: splitNotams(text).map(parseNotam), notamsProvided: text.trim().length > 0,
       routeRegions: rr.regions, now: new Date(), config: state.config,
     });
@@ -784,7 +786,7 @@ function render(r, ctx) {
   const g22 = art22Items({ isNight: ctx.isNight, isSea: ctx.isSea });
   $('art22').innerHTML = g22.length ? `<details open class="a22"><summary>제22조 특수조건 확인 <small>(규정 원문 · 판정에는 반영되지 않음)</small></summary>`
     + g22.map((g) => `<div class="g"><b>${esc(g.title)}</b><ul>${g.items.map((x) => `<li><label><input type="checkbox"> ${esc(x)}</label></li>`).join('')}</ul>${g.proviso ? `<p class="hint">※ ${esc(g.proviso)}</p>` : ''}</div>`).join('')
-    + (ctx.isSea && !state.kakao ? '<p class="hint">※ 지도가 없어 해상 기준을 적용 중입니다. 육상 비행이면 [육상/해상]에서 "육상"을 선택하세요.</p>' : '') + '</details>' : '';
+    + (ctx.isSea && $('landsea').value === 'auto' ? '<p class="hint">※ 경로에 바다 위 구간이 있어 해상 기준(더 엄격)을 적용했습니다. 육상 비행이면 [육상/해상]에서 "육상"을 선택하세요.</p>' : '') + '</details>' : '';
   const ct = criteriaTable(state.config);
   const rowsHtml = (list) => list.map((x) => `<tr><th>${esc(x.label)}</th><td>${esc(x.value)}${x.basis ? ` <small>(${esc(x.basis)})</small>` : ''}</td></tr>`).join('');
   $('criteria').innerHTML = `<h4>규정 조문 (119항공대 운영 규정)</h4><table class="kv">${rowsHtml(ct.regulation)}</table>
