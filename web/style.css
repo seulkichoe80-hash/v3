@@ -344,3 +344,7 @@ html.dark img { filter: none; }
 .csvrow { display: flex; gap: 6px; margin: 8px 0 0; }
 .filebtn { cursor: pointer; display: inline-block; text-align: center; }
 .nt-label.compact { font-size: 10px; padding: 1px 4px; }
+
+details.faroff { margin-top: 6px; color: var(--muted); }
+details.faroff > summary { cursor: pointer; font-size: 12.5px; padding: 4px 2px; }
+details.faroff .n { opacity: .75; }

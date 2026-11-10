@@ -768,15 +768,19 @@ function render(r, ctx) {
   const inScope = r.notams.filter((n) => n.inScope).sort((a, b) => (a.distanceNm ?? 1e9) - (b.distanceNm ?? 1e9));
   const out = r.notams.length - inScope.length;
   const rel = (n) => (n.relation === 'CROSS' ? '경로 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : n.relation === 'CLEAR' ? `경로에서 ${n.distanceNm.toFixed(1)}NM` : '위치 해석 불가');
-  $('notam-list').innerHTML = (inScope.length ? inScope.map((n) => `<div class="n ${n.grade}">
+  // 경로상에 해당하는 NOTAM(통과·근접, 위치를 읽지 못한 것 포함)만 안내하고, 경로와 무관한 것은 접어 둔다
+  const card = (n) => `<div class="n ${n.grade}">
       <b>${esc(n.id || '해석 불가')}</b> ${esc(n.qcodeText || '')} · ${esc(rel(n))}
       · ${n.activeDuringFlight === null ? '발효기간 해석 불가' : n.activeDuringFlight ? '<b>비행 시간대 발효</b>' : '비행 시간대 미발효'}
       <div>${esc(kstStr(n.start, true))} ~ ${n.endPerm ? 'PERM' : esc(kstStr(n.end, true))}${n.endEst ? ' (EST)' : ''} KST · ${esc(n.lower)}~${esc(n.upper)}
       ${n.geomSource === 'Q' ? ' · Q-line 기준(근사)' : ''}</div>
       ${n.center ? `<div class="ncoord">📍 ${esc(formatCoord(n.center, fmtNow()))} · 반경 ${esc(fmtNm(n.radiusNm))}</div>` : ''}
       ${n.needsPermission ? `<div class="perm">⚠ 소방헬기 사전허가 필요${n.phones.length ? ': ' + esc(n.phones.join(', ')) : ''}</div>` : ''}
-      <details><summary>원문</summary><pre>${esc(n.raw)}</pre></details></div>`).join('')
-    : `<p class="hint">${notamText().trim() ? '확인 대상(D 시리즈) NOTAM 없음' : 'NOTAM 미입력 — xNotam 조회 후 붙여넣기'}</p>`)
+      <details><summary>원문</summary><pre>${esc(n.raw)}</pre></details></div>`;
+  const onRoute = inScope.filter((n) => n.relation !== 'CLEAR'), offRoute = inScope.filter((n) => n.relation === 'CLEAR');
+  $('notam-list').innerHTML = (onRoute.length ? onRoute.map(card).join('')
+    : `<p class="hint">${!notamText().trim() ? 'NOTAM 미입력 — xNotam 조회 후 붙여넣기' : inScope.length ? '경로상에 해당하는 NOTAM이 없습니다' : '확인 대상(D 시리즈) NOTAM 없음'}</p>`)
+    + (offRoute.length ? `<details class="faroff"><summary>경로와 무관한 NOTAM ${offRoute.length}건 (보기)</summary>${offRoute.map(card).join('')}</details>` : '')
     + (out ? `<p class="hint">확인 대상 아님(D 시리즈 외) ${out}건</p>` : '');
 
   $('report-text').value = r.reportText;
@@ -925,9 +929,10 @@ function currentNotams() {
 function notamLayer(list, bounds, extend) {
   const k = state.kakao, ll = (p) => new k.LatLng(p.lat, p.lon);
   list.forEach((n, idx) => {
-    const off = n.activeDuringFlight === false;      // 판단 실행 결과로 비행 시간대 미발효로 확인된 NOTAM은 점선·옅게
+    const far = n.relation === 'CLEAR';                 // 판단 실행 결과 경로와 무관한 NOTAM은 점선·옅게
+    const off = n.activeDuringFlight === false || far;  // 비행 시간대 미발효로 확인된 NOTAM도 점선·옅게
     add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
-    add(new k.CustomOverlay({ position: ll(n.center), xAnchor: [0.5, -0.12, 1.12][idx % 3], yAnchor: [1.2, 0.5, 0.5][idx % 3], zIndex: 10 + idx, content: `<div class="nt-label${off ? ' off' : ''}${list.length > 3 ? ' compact' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
+    add(new k.CustomOverlay({ position: ll(n.center), xAnchor: [0.5, -0.12, 1.12][idx % 3], yAnchor: [1.2, 0.5, 0.5][idx % 3], zIndex: 10 + idx, content: `<div class="nt-label${off ? ' off' : ''}${list.length > 3 ? ' compact' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${far ? ' · 경로 무관' : off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
     if (extend && bounds) bounds.extend(ll(n.center));
   });
 }

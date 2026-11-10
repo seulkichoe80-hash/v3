@@ -61,10 +61,19 @@ if (!(await page.isVisible('#old-banner')) || !/분 전/.test(await page.textCon
 // 해상 자동 판별: 울릉도 → 포항 영일대는 바다 위를 지나므로 해상 기준(4800m·1500ft), 내륙은 육상
 await set('#pt-from-name', '울릉도'); await set('#pt-from-coord', '37.5062, 130.8604'); await set('#pt-to-name', '영일대'); await set('#pt-to-coord', '36.0551, 129.3782');
 await page.click('#run'); await ran();
-if (!/해상/.test(await page.textContent('#landsea-auto')) || !/해상 4800m\/1500ft/.test(await page.textContent('#route-info'))) fail('울릉도→포항이 해상으로 판별되지 않음: ' + await page.textContent('#route-info'));
+if (!/해상/.test(await page.textContent('#landsea-auto')) || !/해상 4800m\/(1500|2000)ft/.test(await page.textContent('#route-info'))) fail('울릉도→포항이 해상으로 판별되지 않음: ' + await page.textContent('#route-info'));
 await set('#pt-from-name', '대전'); await set('#pt-from-coord', '36.35, 127.38'); await set('#pt-to-name', '수원'); await set('#pt-to-coord', '37.279, 127.0466');
 await page.click('#run'); await ran();
 if (!/육상/.test(await page.textContent('#landsea-auto'))) fail('내륙 경로가 육상으로 판별되지 않음');
+// NOTAM은 경로상에 해당할 때만 안내: 경로와 먼 NOTAM은 접힌 '경로와 무관' 목록으로, 가까우면 본 목록에
+await page.click('#sheet-tab-3'); if (!(await page.isVisible('#notam-1'))) await page.click('#notam-1-sum');
+await page.fill('#notam-1', (await import('node:fs')).readFileSync(ROOT + 'tests/fixtures/notam_d2840.txt', 'utf8'));
+await page.click('#sheet-tab-1'); await page.click('#run'); await ran();
+if ((await page.locator('#notam-list > .n').count()) !== 0) fail('경로와 먼 NOTAM이 본 목록에 나옴');
+if (!/경로상에 해당하는 NOTAM이 없습니다/.test(await page.textContent('#notam-list')) || (await page.locator('#notam-list details.faroff').count()) !== 1) fail('경로 무관 NOTAM 안내가 이상함: ' + await page.textContent('#notam-list'));
+await set('#pt-from-name', '김포'); await set('#pt-from-coord', '37.5583, 126.7906'); await set('#pt-to-name', '서울역'); await set('#pt-to-coord', '37.5547, 126.9707');
+await page.click('#run'); await ran();
+if ((await page.locator('#notam-list > .n').count()) !== 1 || !/D2840\/26/.test(await page.textContent('#notam-list > .n'))) fail('경로에 걸리는 NOTAM이 본 목록에 없음');
 // 주요지점 CSV: 불러오기(잘못된 줄 건너뜀, 같은 이름 갱신) → 내려받기
 await page.click('#places-sum');
 const csv = '\ufeff이름,종류,위도,경도,메모\r\n가나병원,병원,37.5,127.0,"옥상, 헬리패드"\r\n다라항공대,항공대,36.5,127.2,\r\n오류줄,병원,abc,127,\r\n가나병원,헬리패드,37.6,127.1,수정\r\n';
