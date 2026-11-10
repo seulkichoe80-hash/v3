@@ -143,7 +143,7 @@ await page.fill('#cruise', '0'); await page.dispatchEvent('#cruise', 'change'); 
 await page.waitForFunction(() => document.querySelector('#run-msg').textContent.includes('판단 완료'), null, { timeout: 5000 }).catch(() => fail('순항속도 0 입력 시 멈춤'));
 const hist = await page.evaluate(() => JSON.parse(localStorage.getItem('heliwx.history') || '[]'));
 if (hist.length < 1 || hist[0].to !== '서울역') fail('브라우저 이력 저장 안 됨');
-const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.click('#history-csv')]);
+const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), (async () => { await page.click('details.sec:has(#history-csv) > summary'); await page.click('#history-csv'); })()]);
 if (!dl) fail('이력 CSV 내려받기 안 됨');
 if (csp.length) fail('CSP 위반: ' + csp.join(' / '));
 if (errors.length) fail('콘솔 오류: ' + errors.join(' / '));

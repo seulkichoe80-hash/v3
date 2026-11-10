@@ -80,6 +80,7 @@ async function init() {
   $('usage-csv').addEventListener('click', downloadUsage);
   wireAmb();
   setupSheets();
+  setupExtras();
   document.querySelectorAll('.info-btn').forEach((b) => b.addEventListener('click', () => { const t = $(b.dataset.target); if (t) t.hidden = !t.hidden; }));
   refreshUsage();
   $('cruise').value = cc.config.cruiseKt; $('prep').value = (cc.config.dispatch || {}).heliPrepMin ?? 15;
@@ -96,6 +97,8 @@ async function init() {
   $('place-cat').innerHTML = PLACE_CATS.map((c) => `<option>${c}</option>`).join(''); $('place-cat').value = '기타';
   $('place-more').addEventListener('click', () => { state.placeLimit = (state.placeLimit || PLACE_PAGE) + PLACE_PAGE; renderPlaces(); });
   $('place-q').addEventListener('input', () => { state.placeLimit = PLACE_PAGE; renderPlaces(); });
+  $('place-csv-out').addEventListener('click', downloadPlacesCsv);
+  $('place-csv-in').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) { try { await importPlacesCsv(f); } catch (err) { $('place-csv-msg').textContent = '불러오기 실패: ' + err.message; } } });
   $('place-add').addEventListener('click', addPlaceFromForm);
   $('place-from').addEventListener('change', (e) => {
     const p = state.points[pointKeys().indexOf(e.target.value)];
@@ -178,7 +181,7 @@ function renderPoints() {
     const base = p.role === 'from' && (state.config.bases || []).length
       ? `<select id="pt-${k}-base" aria-label="출발 기지"><option value="">기지 선택</option>${state.config.bases.map((b, j) => `<option value="${j}">${esc(b.name)}</option>`).join('')}</select>` : '';
     const tools = p.role === 'via' ? `<div class="tools">체류 <input id="pt-${k}-stay" class="stay" type="number" min="0" max="600" step="5" value="${p.stayMin || 0}" aria-label="체류시간(분)">분
-        <button type="button" data-act="up" data-i="${i}" aria-label="위로">▲</button><button type="button" data-act="down" data-i="${i}" aria-label="아래로">▼</button><button type="button" data-act="del" data-i="${i}">삭제</button></div>` : '';
+        <button type="button" data-act="dup" data-i="${i}" aria-label="복제" title="이 경유지를 바로 아래에 복제">복제</button><button type="button" data-act="up" data-i="${i}" aria-label="위로">▲</button><button type="button" data-act="down" data-i="${i}" aria-label="아래로">▼</button><button type="button" data-act="del" data-i="${i}">삭제</button></div>` : '';
     return `<fieldset class="place ${p.role}" data-i="${i}"><legend>${roleLabel(k)}</legend>${base}
       <div class="search"><input id="pt-${k}-q" type="search" placeholder="장소 검색" autocomplete="off"><ul class="results" id="pt-${k}-results"></ul></div>
       <div class="row coord-only"><input id="pt-${k}-name" placeholder="이름 (좌표로 입력할 때)" value="${esc(p.name)}"></div>
@@ -223,6 +226,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
   const i = +b.dataset.i, pts = state.points;
   if (b.dataset.act === 'del') pts.splice(i, 1);
+  if (b.dataset.act === 'dup') { if (pts.filter((p) => p.role === 'via').length >= MAX_VIA) return; pts.splice(i + 1, 0, { ...pts[i], role: 'via' }); }
   if (b.dataset.act === 'up' && pts[i - 1]?.role === 'via') [pts[i - 1], pts[i]] = [pts[i], pts[i - 1]];
   if (b.dataset.act === 'down' && pts[i + 1]?.role === 'via') [pts[i + 1], pts[i]] = [pts[i], pts[i + 1]];
   renderPoints();
@@ -397,6 +401,53 @@ async function addPlaceFromForm() {
   } catch (e) { msg.textContent = '추가 실패: ' + e.message; }
 }
 
+
+// ---------- 주요지점 엑셀(CSV) 내려받기·불러오기 ----------
+const csvCell = (v) => { let t = String(v ?? ''); if (/^[=+\-@]/.test(t) && !/^-?\d+(\.\d+)?$/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+function parseCsv(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',' || c === '\t') { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some((x) => x.trim() !== '')) rows.push(row); row = []; }
+    else cur += c;
+  }
+  row.push(cur); if (row.some((x) => x.trim() !== '')) rows.push(row);
+  return rows;
+}
+function downloadPlacesCsv() {
+  const head = ['이름', '종류', '위도', '경도', '메모'];
+  const lines = [head, ...state.favs.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko')).map((p) => [p.name, placeCat(p), p.lat, p.lon, p.memo || ''])];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.map((r) => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = `재난하늘119-주요지점-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+async function importPlacesCsv(file) {
+  const msg = $('place-csv-msg');
+  const buf = await file.arrayBuffer();
+  let text; try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch { text = new TextDecoder('euc-kr').decode(buf); }   // 엑셀 기본 저장(CP949)도 읽음
+  const rows = parseCsv(text.replace(/^﻿/, ''));
+  if (rows.length < 2) { msg.textContent = '불러올 줄이 없습니다 (첫 줄은 제목: 이름, 종류, 위도, 경도, 메모)'; return; }
+  const idx = (names) => rows[0].findIndex((h) => names.includes(h.trim()));
+  const ci = { name: idx(['이름', '명칭', 'name']), cat: idx(['종류', '분류', 'cat']), lat: idx(['위도', 'lat']), lon: idx(['경도', 'lon', 'lng']), memo: idx(['메모', 'memo']) };
+  if (ci.name < 0 || ci.lat < 0 || ci.lon < 0) { msg.textContent = '첫 줄에 "이름, 위도, 경도" 열이 있어야 합니다 (종류·메모는 선택)'; return; }
+  let added = 0, updated = 0; const errs = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r], name = (row[ci.name] || '').trim(), lat = parseFloat(row[ci.lat]), lon = parseFloat(row[ci.lon]);
+    const cat = ci.cat >= 0 ? (row[ci.cat] || '').trim() : '', memo = ci.memo >= 0 ? (row[ci.memo] || '').trim().slice(0, 100) : '';
+    if (!name || name.length > 50 || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) { errs.push(`${r + 1}번째 줄`); continue; }
+    const exist = state.favs.find((p) => p.name === name);
+    try {
+      await savePlace({ ...(exist ? { id: exist.id } : {}), name, lat, lon, memo, cat: PLACE_CATS.includes(cat) ? cat : (exist ? placeCat(exist) : '기타') });
+      if (exist) updated++; else added++;
+    } catch (e) { errs.push(`${r + 1}번째 줄(${e.message})`); }
+  }
+  msg.textContent = `불러오기 완료 — 추가 ${added}곳, 갱신 ${updated}곳${errs.length ? `, 건너뜀 ${errs.length}건: ${errs.slice(0, 4).join(', ')}${errs.length > 4 ? ' …' : ''}` : ''}`;
+}
+
 // ---------- NOTAM 칸(공유 저장) ----------
 async function loadNotams() {
   let slots = {}, shared = false, err = '';
@@ -534,6 +585,87 @@ function routeRegions(route) {
   });
 }
 
+
+// ---------- 사용 편의 기능 ----------
+const ROUTES_KEY = 'heliwx.routes', LOOK_KEY = 'heliwx.look', LAST_OLD_MIN = 20;
+function routeLabel(pts) { return pts.map((p) => p.name).join(' → '); }
+function loadRoutes() { return store.get(ROUTES_KEY, []); }
+function saveRoute(pts, amb) {
+  const entry = { label: routeLabel(pts), pts: pts.map((p) => ({ name: p.name, lat: p.lat, lon: p.lon, stayMin: p.stayMin || 0 })), amb: { from: state.amb.from, to: state.amb.to }, savedAt: Date.now() };
+  store.set(ROUTES_KEY, [entry, ...loadRoutes().filter((r) => r.label !== entry.label)].slice(0, 10));
+  fillRecentRoutes();
+}
+function fillRecentRoutes() {
+  const sel = $('recent-routes'); if (!sel) return;
+  sel.innerHTML = '<option value="">최근 조회 경로 불러오기…</option>' + loadRoutes().map((r, i) => `<option value="${i}">${esc(r.label)}</option>`).join('');
+}
+function applyRoute(r) {
+  if (!r || !r.pts || r.pts.length < 2) return;
+  const last = r.pts.length - 1;
+  state.points = r.pts.map((p, i) => ({ role: i === 0 ? 'from' : i === last ? 'to' : 'via', name: p.name, lat: p.lat, lon: p.lon, text: formatCoord(p, fmtNow()), stayMin: p.stayMin || 0 }));
+  state.amb = { from: (r.amb && r.amb.from) || null, to: (r.amb && r.amb.to) || null };
+  renderPoints(); showAmb();
+}
+function swapRoute() {
+  const pts = state.points; if (pts.length < 2) return;
+  const rev = pts.slice().reverse().map((p) => ({ ...p }));
+  state.points = rev.map((p, i) => ({ ...p, role: i === 0 ? 'from' : i === rev.length - 1 ? 'to' : 'via', stayMin: i === 0 || i === rev.length - 1 ? 0 : p.stayMin || 0 }));
+  if (state.amb.from || state.amb.to) state.amb = { from: state.amb.to, to: state.amb.from };
+  renderPoints(); showAmb();
+}
+function headlineText(r, tp) {
+  const sev = { RED: 0, YELLOW: 1, NA: 2 };
+  const key = r.rows.filter((x) => x.grade in sev).sort((a, b) => sev[a.grade] - sev[b.grade])[0];
+  const times = tp && tp.amb ? `헬기 ${tp.heli.totalMin}분 · 구급차 ${tp.amb.totalMin}분` : tp ? `헬기 ${tp.heli.totalMin}분` : '';
+  return { l1: times || GRADE_TEXT[r.overall], l2: `${tp ? tp.text : ''}${key ? ` — 핵심: ${key.segment} ${key.item} ${key.value}` : ''}` };
+}
+function renderHeadline(r, tp) {
+  const h = headlineText(r, tp), el = $('headline');
+  el.hidden = false; el.dataset.grade = r.overall;
+  el.innerHTML = `<b>${esc(h.l1)}</b><span>${esc(h.l2)}</span>`;
+}
+function renderDataStatus(meta) {
+  $('data-status').innerHTML = meta.length ? '<span class="ds-t">기상 자료</span>' + meta.map((m) => {
+    const bad = m.error && !m.hasItems, old = m.stale || (m.ageMin !== null && m.ageMin > (state.config.freshnessMin[m.k] || 1e9));
+    const txt = bad ? '수신 실패' : m.ageMin === null ? '—' : m.ageMin < 1 ? '방금' : `${m.ageMin}분 전`;
+    return `<span class="ds ${bad ? 'bad' : old ? 'old' : 'ok'}">${esc(m.label)} ${txt}</span>`;
+  }).join('') : '';
+}
+let oldTimer = null;
+function startOldWatch() {
+  clearInterval(oldTimer); state.lastRunAt = Date.now(); $('old-banner').hidden = true;
+  oldTimer = setInterval(() => {
+    const min = Math.floor((Date.now() - state.lastRunAt) / 60000);
+    if (min >= LAST_OLD_MIN) { const b = $('old-banner'); b.hidden = false; b.innerHTML = `⚠ 이 판단은 <b>${min}분 전</b> 결과입니다. 기상이 바뀌었을 수 있으니 <button type="button" id="old-rerun" class="mini">다시 실행</button>`; $('old-rerun').addEventListener('click', run); }
+  }, 30000);
+}
+function applyLook() {
+  let l = {}; try { l = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}'); } catch { /* 저장 불가여도 동작 */ }
+  document.body.classList.toggle('big', !!l.big); document.documentElement.classList.toggle('dark', !!l.dark);
+  $('btn-big').setAttribute('aria-pressed', l.big ? 'true' : 'false'); $('btn-dark').setAttribute('aria-pressed', l.dark ? 'true' : 'false');
+}
+function toggleLook(key) {
+  let l = {}; try { l = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}'); } catch { /* 무시 */ }
+  l[key] = !l[key]; try { localStorage.setItem(LOOK_KEY, JSON.stringify(l)); } catch { /* 무시 */ }
+  applyLook();
+}
+function setupExtras() {
+  fillRecentRoutes();
+  $('recent-routes').addEventListener('change', (e) => { if (e.target.value !== '') applyRoute(loadRoutes()[+e.target.value]); e.target.value = ''; });
+  $('swap').addEventListener('click', swapRoute);
+  $('depart-now').addEventListener('click', () => { $('depart').value = kstInputNow(); });
+  for (const id of ['depart', 'cruise', 'prep']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !$('run').disabled) { e.preventDefault(); run(); } });
+  $('btn-help').addEventListener('click', () => { const h = $('help-panel'); h.hidden = !h.hidden; $('btn-help').setAttribute('aria-expanded', h.hidden ? 'false' : 'true'); });
+  $('btn-big').addEventListener('click', () => toggleLook('big'));
+  $('btn-dark').addEventListener('click', () => toggleLook('dark'));
+  applyLook();
+  $('data-warn').addEventListener('click', (e) => { if (e.target.closest('#retry-run')) run(); });
+  // 마지막으로 쓴 출발지를 처음부터 채워 둠(출발지가 비어 있을 때만)
+  const r0 = loadRoutes()[0];
+  if (r0 && state.points[0] && !Number.isFinite(state.points[0].lat)) { const f = r0.pts[0]; Object.assign(state.points[0], { name: f.name, lat: f.lat, lon: f.lon, text: formatCoord(f, fmtNow()) }); renderPoints(); }
+}
+
 // ---------- 낡은 화면 감지 ----------
 // 열어 둔 페이지는 옛 코드를 그대로 쓰므로, 서버 버전이 바뀌었으면 새로고침 안내를 띄운다.
 async function checkVersion() {
@@ -557,9 +689,10 @@ async function run() {
       routeRegions(pts).catch(() => ({ regions: [], seaPoints: 0, available: false })),
       (amb.from && amb.to ? api(`/api/drive?olat=${amb.from.lat}&olon=${amb.from.lon}&dlat=${amb.to.lat}&dlon=${amb.to.lon}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null)),
     ]);
-    const data = {}, dataStatus = {}, warns = [];
+    const data = {}, dataStatus = {}, warns = [], meta = [];
     settled.forEach((s, i) => {
       const k = KINDS[i];
+      meta.push(s.status === 'rejected' ? { k, label: KIND_TEXT[k], error: true, hasItems: false, ageMin: null, stale: false } : { k, label: KIND_TEXT[k], error: !!s.value.error, hasItems: !!(s.value.items || []).length, ageMin: s.value.ageMin ?? null, stale: !!s.value.stale });
       if (s.status === 'rejected') { data[k] = []; dataStatus[k] = 'error'; warns.push(`${KIND_TEXT[k]} 수신 실패`); return; }
       data[k] = s.value.items || [];
       if (s.value.error && !data[k].length) { dataStatus[k] = 'error'; warns.push(`${KIND_TEXT[k]} 수신 실패 — ${String(s.value.error).slice(0, 140)}`); }
@@ -591,11 +724,12 @@ async function run() {
     const tp = compareTransport({ prepMin: prep, flightMin: result.durationMin, overall: result.overall, road, closeMin: dsp.closeMin ?? 5, missing: amb.from && amb.to ? '' : '구급차 이동시간 칸에 현장→병원을 입력하거나, 경유지 1에 현장을 추가하세요' });
     tp.ambRoute = amb.from && amb.to ? `${amb.from.name} → ${amb.to.name}` : '';
     result.transport = tp;
-    result.reportText += ' | ' + transportLine(tp);
+    result.reportText += ' | ' + transportLine(tp) + ` | 조회 ${kstStr(new Date(), true)} KST`;
     state.last = { result, data, pts };
     $('map-click-on').checked = false;     // 판단 실행 후에는 지도를 눌러도 출발·목적지가 바뀌지 않게 잠금
     renderTransport(tp);
     render(result, { isNight, isSea, warns });
+    renderHeadline(result, tp); renderDataStatus(meta); startOldWatch(); saveRoute(pts);
     drawMap(result, data, pts);
     $('run-msg').textContent = `판단 완료 ${kstStr(new Date())}`;
     const entry = { time: new Date().toISOString(), from: from.name, to: to.name, via: pts.slice(1, -1).map((p) => p.name).join(' / '), distanceKm: result.distanceKm, overall: result.overall };
@@ -617,7 +751,7 @@ function render(r, ctx) {
     ['거리', `${r.distanceKm}km / ${r.distanceNm}NM`], ['소요', `${r.durationMin}분${r.totalStayMin ? ` (체류 ${r.totalStayMin}분)` : ''}`], ['도착 예정', kstStr(r.arriveUtc)],
     ['적용 기준', `${ctx.isNight ? '야간' : '주간'}·${ctx.isSea ? '해상' : '육상'} ${r.limits.visM}m/${r.limits.ceilFt}ft`],
   ].map(([k, v]) => `<div>${esc(k)}<b>${esc(v)}</b></div>`).join('');
-  $('data-warn').innerHTML = ctx.warns.map(esc).join('<br>');
+  $('data-warn').innerHTML = ctx.warns.length ? ctx.warns.map(esc).join('<br>') + ' <button type="button" id="retry-run" class="mini">다시 시도</button>' : '';
   $('sun').innerHTML = (r.sunNote ? `<div class="alert">☀ ${esc(r.sunNote)}</div>` : '')
     + r.sun.map((s) => `<div class="s"><b>${esc(s.segment)}</b><span>${esc(s.name)}</span><span>일출 ${esc(kstStr(s.sunrise))} · 일몰 ${esc(kstStr(s.sunset))}</span></div>`).join('');
   $('legs').innerHTML = r.legs.length > 1 || r.totalStayMin ? r.legs.map((l, i) => `<tr><td data-l="구간">${esc(l.from)} → ${esc(l.to)}</td><td data-l="거리">${l.distanceKm}km</td><td data-l="소요">${l.durationMin}분</td>
@@ -791,12 +925,12 @@ function currentNotams() {
 }
 function notamLayer(list, bounds, extend) {
   const k = state.kakao, ll = (p) => new k.LatLng(p.lat, p.lon);
-  for (const n of list) {
+  list.forEach((n, idx) => {
     const off = n.activeDuringFlight === false;      // 판단 실행 결과로 비행 시간대 미발효로 확인된 NOTAM은 점선·옅게
     add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
-    add(new k.CustomOverlay({ position: ll(n.center), yAnchor: 1.2, content: `<div class="nt-label${off ? ' off' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
+    add(new k.CustomOverlay({ position: ll(n.center), xAnchor: [0.5, -0.12, 1.12][idx % 3], yAnchor: [1.2, 0.5, 0.5][idx % 3], zIndex: 10 + idx, content: `<div class="nt-label${off ? ' off' : ''}${list.length > 3 ? ' compact' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
     if (extend && bounds) bounds.extend(ll(n.center));
-  }
+  });
 }
 let notamSyncTimer = null;
 function syncMapNotams() {

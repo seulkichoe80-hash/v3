@@ -26,8 +26,21 @@
     </div>
   </div>
   <div class="usage-chip" id="usage-chip" hidden title="모든 사용자의 누적 조회 건수">누적 <b id="usage-chip-n">0</b>건</div>
+  <div class="tools-top">
+    <button type="button" class="tbtn" id="btn-help" aria-expanded="false">사용법</button>
+    <button type="button" class="tbtn" id="btn-big" aria-pressed="false">글자 크게</button>
+    <button type="button" class="tbtn" id="btn-dark" aria-pressed="false">야간 화면</button>
+  </div>
   <div class="clock" id="clock" aria-live="off"></div>
 </header>
+<section id="help-panel" class="help" hidden>
+  <b>사용 순서</b>
+  <ol>
+    <li><b>입력</b> — 출발지(항공대)·경유지(현장)·목적지(병원)를 정하고, NOTAM은 ③시트에 붙여넣습니다.</li>
+    <li><b>[판단 실행]</b> — 헬기·구급차 소요시간 비교와 제21조 기준 판정이 나옵니다. (Enter 또는 Ctrl+Enter로도 실행)</li>
+    <li><b>보고</b> — 결과 맨 위 요약을 확인하고 [보고문 복사]로 통제관·기장에게 보고합니다. 최종 판단은 사람이 합니다.</li>
+  </ol>
+</section>
 
 <main class="layout">
   <!-- 입력 -->
@@ -45,6 +58,10 @@
     <label class="fmt coord-only">좌표 형식
       <select id="coord-fmt"><option value="dd">십진수 (37.5583, 126.7906)</option><option value="ddm">도·분 (37°33.498'N …)</option><option value="dms">도·분·초 (37°33'30"N …)</option></select>
     </label>
+    <div class="rowbtns">
+      <button type="button" id="swap" class="ghost" title="출발지와 목적지(경유지 포함)의 순서를 거꾸로">⇅ 출발·도착 바꾸기</button>
+      <select id="recent-routes" aria-label="최근 조회 경로"><option value="">최근 조회 경로 불러오기…</option></select>
+    </div>
     <div id="points"></div>
     <button id="add-via" type="button" class="ghost">+ 경유지 추가</button>
     <fieldset class="amb" id="amb-box">
@@ -59,7 +76,7 @@
       <p class="hint" id="amb-help" hidden>비워 두면 경유지 1(현장) → 목적지(병원)가 자동으로 들어갑니다. 헬기는 위 경로(항공대 → 현장 → 병원), 구급차는 이 칸의 현장 → 병원으로 비교합니다.</p>
     </fieldset>
     <div class="grid2">
-      <label>출발 예정시각(KST)<input id="depart" type="datetime-local"></label>
+      <label>출발 예정시각(KST)<span class="withbtn"><input id="depart" type="datetime-local"><button type="button" id="depart-now" class="mini">지금</button></span></label>
       <label>순항속도(kt)<input id="cruise" type="number" min="40" max="200" step="5"></label>
       <label>접수→이륙(분)<input id="prep" type="number" min="0" max="120" step="1"></label>
       <label>주간/야간<select id="daynight"><option value="auto">자동</option><option value="day">주간</option><option value="night">야간</option></select><small id="daynight-auto"></small></label>
@@ -73,6 +90,11 @@
       <div class="chips" id="place-chips" role="group" aria-label="종류"></div>
       <ul id="place-list" class="place-list"></ul>
       <button id="place-more" type="button" class="ghost" hidden>더 보기</button>
+      <div class="csvrow">
+        <button type="button" id="place-csv-out" class="mini">엑셀(CSV) 내려받기</button>
+        <label class="mini filebtn">엑셀(CSV) 불러오기<input id="place-csv-in" type="file" accept=".csv,text/csv" hidden></label>
+      </div>
+      <p class="hint" id="place-csv-msg"></p>
       <div class="place-add">
         <b>새 주요지점</b>
         <select id="place-from" aria-label="현재 지점에서 가져오기"></select>
@@ -96,8 +118,10 @@
 
     </div>
 
-    <button id="run" class="run" type="button">판단 실행</button>
-    <p class="hint" id="run-msg" role="status"></p>
+    <div class="runbar">
+      <button id="run" class="run" type="button">판단 실행</button>
+      <p class="hint" id="run-msg" role="status"></p>
+    </div>
   </section>
 
   <!-- 지도 -->
@@ -110,7 +134,10 @@
   <!-- 결과 -->
   <section class="panel result" aria-labelledby="h-result">
     <h2 id="h-result">판단 조언</h2>
+    <div id="old-banner" class="oldbanner" hidden role="alert"></div>
     <div id="overall" class="overall empty">입력 후 [판단 실행]</div>
+    <div id="headline" class="headline" hidden></div>
+    <div id="data-status" class="data-status"></div>
     <div id="route-info" class="route-info"></div>
     <div id="transport" class="transport" hidden></div>
     <div id="data-warn" class="data-warn"></div>
@@ -121,32 +148,34 @@
     </table></div>
 
     <div id="art22" class="art22"></div>
-    <h3>근거</h3>
+    <details class="sec" open><summary>근거</summary>
     <div class="table-wrap"><table>
       <thead><tr><th>구간</th><th>항목</th><th>값</th><th>기준</th><th>판정</th><th>출처·관측</th></tr></thead>
       <tbody id="rows"></tbody>
     </table></div>
-
+    </details>
     <details id="criteria-wrap" class="raw"><summary>판정 기준 보기 (규정 조문 · 시스템 설정값)</summary><div id="criteria"></div></details>
-    <h3>바람 <small>(판정 제외 · 기종별 교범 적용)</small></h3>
+    <details class="sec" open><summary>바람 <small>(판정 제외 · 기종별 교범 적용)</small></summary>
     <div id="wind" class="wind"></div>
-
-    <h3>항공고시보</h3>
+    </details>
+    <details class="sec" open><summary>항공고시보</summary>
     <div id="notam-list" class="notam-list"></div>
-
+    </details>
     <details id="sigwx-raw-wrap" class="raw" hidden><summary>저고도 SIGWX 원문 보기 (형식 확인용)</summary>
       <div class="rawbtns"><button type="button" id="sigwx-sum-btn" class="mini">구조 요약</button> <button type="button" id="sigwx-data-btn" class="mini">조회 결과</button> <button type="button" id="sigwx-help-btn" class="mini">API 설명문(help) 보기</button></div>
       <pre id="sigwx-raw"></pre></details>
-    <h3>보고문</h3>
+    <details class="sec" open><summary>보고문</summary>
     <textarea id="report-text" rows="5" readonly></textarea>
     <button id="copy" type="button" class="copy">보고문 복사</button>
-    <h3>조회 이력 <small id="history-count"></small></h3>
+    </details>
+    <details class="sec"><summary>조회 이력 <small id="history-count"></small></summary>
     <div id="usage-box" class="usage" hidden>
       <div class="usage-main">전체 사용자 누적 <strong id="usage-total">0</strong>건 <small id="usage-sub"></small></div>
       <div class="usage-bars" id="usage-bars" aria-label="최근 7일 조회 건수"></div>
       <button id="usage-csv" type="button" class="copy">공용 누적 이력 CSV 내려받기</button>
     </div>
     <button id="history-csv" type="button" class="copy">이 브라우저 이력 CSV 내려받기</button>
+    </details>
   </section>
 </main>
 
