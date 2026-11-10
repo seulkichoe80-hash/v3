@@ -729,7 +729,7 @@ function wireAmb() {
   for (const side of ['from', 'to']) {
     searchBox($(`amb-${side}-q`), $(`amb-${side}-results`), (pl) => { state.amb[side] = pl; $(`amb-${side}-q`).value = ''; $(`amb-${side}-q`).placeholder = pl.name; showAmb(); });
   }
-  $('amb-clear').addEventListener('click', () => { state.amb = { from: null, to: null }; for (const s of ['from', 'to']) { $(`amb-${s}-q`).value = ''; $(`amb-${s}-q`).placeholder = s === 'from' ? '현장 (비우면 경유지 1)' : '병원 (비우면 목적지)'; } showAmb(); });
+  $('amb-clear').addEventListener('click', () => { state.amb = { from: null, to: null }; for (const s of ['from', 'to']) { $(`amb-${s}-q`).value = ''; $(`amb-${s}-q`).placeholder = s === 'from' ? '현장 검색' : '병원 검색'; } showAmb(); });
   showAmb();
 }
 function showAmb() {

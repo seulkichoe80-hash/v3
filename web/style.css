@@ -292,3 +292,6 @@ table.kv td { white-space: normal; }
 .place-list .pick small { display: block; }
 .place-list .catsel { flex: 0 0 auto; width: 7.3em; min-width: 0; padding: 2px 0 2px 2px; font-size: 12px; text-overflow: clip; }
 .place-list .del { flex: 0 0 auto; width: auto; white-space: nowrap; padding: 3px 7px; }
+
+.amb-line .search input { font-size: 13px; padding-left: 8px; padding-right: 6px; text-overflow: clip; }
+.amb-line .search input::placeholder { font-size: 12.5px; }
