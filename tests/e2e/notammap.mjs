@@ -21,6 +21,16 @@ await page.waitForFunction(() => /정부대전청사/.test(document.querySelecto
 await page.click('#pt-to-results li:has-text("정부대전청사")');
 if (!(await page.isVisible('#notam-1'))) await page.click('#notam-1-sum');
 await page.fill('#notam-1', readFileSync(ROOT + 'tests/fixtures/notam_d2840.txt', 'utf8'));
+// ① 판단 실행 전에도 NOTAM이 지도에 그려진다(빨간 원+라벨)
+await page.waitForTimeout(600);
+let pre = await page.evaluate(() => window.__kk.map((x) => ({ name: x.name, c: x.o.strokeColor, html: x.o.content })));
+if (!pre.some((x) => x.name === 'Circle' && x.c === '#d6201a')) fail('판단 실행 전에 NOTAM 원이 안 그려짐');
+if (!pre.some((x) => /nt-label/.test(x.html || '') && /D2840\/26/.test(x.html))) fail('판단 실행 전 NOTAM 라벨 없음');
+// ② 판단 실행 전에는 지도 클릭으로 지점이 바뀐다
+const clickMap = (la = 35.1, lo = 129.0) => page.evaluate(([a, b]) => window.__kl.click({ latLng: { getLat: () => a, getLng: () => b } }), [la, lo]);
+const toLoc = () => page.textContent('#pt-to-loc');
+const before = await toLoc(); await clickMap(); await page.waitForTimeout(200);
+if ((await toLoc()) === before) fail('판단 실행 전에는 지도 클릭으로 목적지가 바뀌어야 함');
 await page.click('#run'); await page.waitForSelector('#overall[data-grade]', { timeout: 15000 });
 const rec = await page.evaluate(() => window.__kk.map((x) => ({ name: x.name, c: x.o.strokeColor, r: x.o.radius, html: x.o.content })));
 const circle = rec.find((x) => x.name === 'Circle' && x.c === '#d6201a');
@@ -28,4 +38,10 @@ if (!circle || !(circle.r > 0)) fail('빨간 NOTAM 원이 안 그려짐: ' + JSO
 const label = rec.find((x) => x.name === 'CustomOverlay' && /nt-label/.test(x.html || ''));
 if (!label || !/D2840\/26/.test(label.html) || !/반경 [\d.]+NM/.test(label.html) || !/\d/.test(label.html.split('<br>')[1] || '')) fail('좌표·반경 라벨 이상: ' + (label && label.html));
 if (!/📍/.test(await page.textContent('#notam-list')) || !/반경 [\d.]+NM/.test(await page.textContent('#notam-list'))) fail('목록에 좌표·반경 줄 없음');
+// ③ 판단 실행 후에는 지도를 눌러도 출발·목적지가 바뀌지 않는다
+if (await page.isChecked('#map-click-on')) fail('판단 실행 후 지도 클릭 지정이 꺼져 있어야 함');
+const locked = await toLoc(); await clickMap(); await page.waitForTimeout(200);
+if ((await toLoc()) !== locked) fail('판단 실행 후에도 지도 클릭으로 목적지가 바뀜');
+await page.check('#map-click-on'); await clickMap(36.2, 128.3); await page.waitForTimeout(200);
+if ((await toLoc()) === locked) fail('잠금을 해제하면 다시 지도 클릭으로 바뀌어야 함');
 console.log('PASS notammap'); await browser.close(); srv.kill();

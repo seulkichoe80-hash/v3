@@ -142,7 +142,9 @@ function loadKakao(key) {
         state.map.addControl(new k.ZoomControl(), k.ControlPosition.RIGHT);
         state.geocoder = new k.services.Geocoder();
         state.placeSvc = new k.services.Places();
+        setTimeout(syncMapNotams, 0);     // 지도가 준비되면 이미 입력·저장된 NOTAM을 바로 표시
         k.event.addListener(state.map, 'click', (e) => {
+          if (!$('map-click-on').checked) { $('run-msg').textContent = '지도 클릭으로 지점을 바꾸지 않도록 잠겨 있습니다(판단 실행 후). 바꾸려면 "지도 클릭으로 지점 지정"을 켜세요.'; return; }
           const which = state.clickTarget;
           const ll = e.latLng;
           const p = { name: `지도 지점(${ll.getLat().toFixed(4)}, ${ll.getLng().toFixed(4)})`, lat: ll.getLat(), lon: ll.getLng() };
@@ -418,16 +420,17 @@ function renderSlots() {
       $(`notam-${i}-status`).textContent = dirty ? '· 저장 안 됨' : cur.savedAt ? `· 저장됨 ${kstStr(cur.savedAt, true)}` : '';
       ta.closest('.nslot').classList.toggle('dirty', dirty);
     };
-    ta.addEventListener('input', () => { state.slots[i] = { ...(state.slots[i] || {}), text: ta.value }; refresh(); });
+    ta.addEventListener('input', () => { state.slots[i] = { ...(state.slots[i] || {}), text: ta.value }; refresh(); syncMapNotams(); });
     $(`notam-${i}-save`).addEventListener('click', () => saveSlot(i, ta.value).then(refresh));
     $(`notam-${i}-del`).addEventListener('click', () => {
       if (!ta.value.trim() && !(state.slots[i] || {}).savedText) return;
       if (!confirm(`${CIRCLED[i - 1]}번 칸을 삭제할까요?${state.notamShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
-      deleteSlot(i).then(() => { ta.value = ''; refresh(); });
+      deleteSlot(i).then(() => { ta.value = ''; refresh(); syncMapNotams(); });
     });
     refresh();
   }
   $('notam-add').disabled = state.slotCount >= MAX_SLOTS;
+  syncMapNotams();
 }
 
 async function saveSlot(i, text) {
@@ -560,6 +563,7 @@ async function run() {
     result.transport = tp;
     result.reportText += ' | ' + transportLine(tp);
     state.last = { result, data, pts };
+    $('map-click-on').checked = false;     // 판단 실행 후에는 지도를 눌러도 출발·목적지가 바뀌지 않게 잠금
     renderTransport(tp);
     render(result, { isNight, isSea, warns });
     drawMap(result, data, pts);
@@ -732,6 +736,33 @@ function drawRouteOnly() {
   if (state.map && !bad.length && pts.length >= 2) drawMap(null, null, pts);
 }
 
+// ---------- NOTAM 지도 표시(상시): 붙여넣은 D 시리즈 NOTAM을 판단 실행 전에도 빨간 원·좌표·반경으로 그림 ----------
+function currentNotams() {
+  return splitNotams(notamText()).map(parseNotam).filter((n) => n.id && n.series === 'D' && n.center);
+}
+function notamLayer(list, bounds, extend) {
+  const k = state.kakao, ll = (p) => new k.LatLng(p.lat, p.lon);
+  for (const n of list) {
+    const off = n.activeDuringFlight === false;      // 판단 실행 결과로 비행 시간대 미발효로 확인된 NOTAM은 점선·옅게
+    add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
+    add(new k.CustomOverlay({ position: ll(n.center), yAnchor: 1.2, content: `<div class="nt-label${off ? ' off' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}</div>` }));
+    if (extend && bounds) bounds.extend(ll(n.center));
+  }
+}
+let notamSyncTimer = null;
+function syncMapNotams() {
+  clearTimeout(notamSyncTimer);
+  notamSyncTimer = setTimeout(() => {
+    if (!state.kakao || !state.map) return;
+    const { pts, bad } = readyPoints();
+    if (!bad.length && pts.length >= 2) { drawMap(null, null, pts); return; }   // 경로가 있으면 경로와 함께 다시 그림
+    clearOverlays();
+    const list = currentNotams(), b = new state.kakao.LatLngBounds();
+    notamLayer(list, b, true);
+    if (list.length) state.map.setBounds(b, 80, 80, 80, 80);
+  }, 250);
+}
+
 function drawMap(result, data, pts) {
   const k = state.kakao; if (!k || !state.map) return;
   clearOverlays();
@@ -740,18 +771,13 @@ function drawMap(result, data, pts) {
   pts.forEach((p, i) => add(new k.CustomOverlay({ position: ll(p), yAnchor: 1,
     content: `<div class="pin">${esc((i === 0 ? '출발 ' : i === pts.length - 1 ? '목적 ' : `경유${i} `) + p.name)}</div>` })));
   const b = new k.LatLngBounds(); pts.forEach((p) => b.extend(ll(p)));
+  notamLayer(result ? result.notams.filter((n) => n.inScope && n.center) : currentNotams(), b, !!result);   // NOTAM은 판단 실행 전에도 항상 표시
   if (result && data) {
     const lim = result.limits, f = state.config.limits.cautionFactor;
     const g = (o) => (o.visM === null || o.visM === undefined ? 'NA' : o.visM < lim.visM || (o.ceilFt !== null && o.ceilFt < lim.ceilFt) ? 'RED' : o.visM < lim.visM * f || (o.ceilFt !== null && o.ceilFt < lim.ceilFt * f) ? 'YELLOW' : 'GREEN');
     const near = (o) => o && typeof o.lat === 'number' && pts.some((p) => distanceKm(o, p) < Math.max(60, routeLengthKm(pts) / 2 + 40));
     for (const o of [...data.metar, ...data.asos].filter(near)) {
       add(new k.CustomOverlay({ position: ll(o), content: `<div class="stn-dot ${g(o)}" title="${esc(o.name)} 시정 ${o.visM ?? '-'}m 운고 ${o.ceilFt ?? '-'}ft"></div>` }));
-    }
-    for (const n of result.notams.filter((n) => n.inScope && n.center)) {
-      const off = n.activeDuringFlight === false;      // 비행 시간대에 발효하지 않는 NOTAM은 점선·옅게
-      add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
-      add(new k.CustomOverlay({ position: ll(n.center), yAnchor: 1.2, content: `<div class="nt-label${off ? ' off' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}</div>` }));
-      b.extend(ll(n.center));
     }
     const SIG_COLOR = { ICE: '#1f77d0', TURB: '#c4231a', MTN: '#7a5a2a', VIS: '#2e9e5b', TS: '#b100c4', CLD: '#4b6b8a', WIND: '#3b4cc0', ETC: '#555' };
     for (const z of (data.sigwx || []).filter((z) => z.kind !== 'FZL' && z.closed !== false && (!z.layer || z.layer === 'low') && z.points.length >= 3)) {
