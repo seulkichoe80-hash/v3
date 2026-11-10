@@ -21,7 +21,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' https://dapi.kakao.com https://t1.kakaocdn.net https://t1.daumcdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://dapi.kakao.com; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' https://dapi.kakao.com https://*.kakaocdn.net https://*.daumcdn.net; style-src 'self' 'unsafe-inline' https://*.kakaocdn.net; img-src 'self' data: blob: https:; connect-src 'self' https://dapi.kakao.com https://*.kakaocdn.net https://*.daumcdn.net; font-src 'self' data: https://*.kakaocdn.net; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
         },
         {
           "key": "X-Content-Type-Options",

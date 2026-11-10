@@ -14,11 +14,11 @@ JSON_T = 'application/json; charset=utf-8'
 # 보안 헤더(vercel.json의 headers와 같아야 하며 시험으로 확인한다). CSP는 감시 모드(Report-Only)로 실사이트 위반 0건을 확인한 뒤 강제 모드로 전환했다(2026-11-08).
 CSP_HEADER_NAME = 'Content-Security-Policy'
 CSP = ("default-src 'self'; "
-       "script-src 'self' 'unsafe-eval' https://dapi.kakao.com https://t1.kakaocdn.net https://t1.daumcdn.net; "
-       "style-src 'self' 'unsafe-inline'; "
+       "script-src 'self' 'unsafe-eval' https://dapi.kakao.com https://*.kakaocdn.net https://*.daumcdn.net; "
+       "style-src 'self' 'unsafe-inline' https://*.kakaocdn.net; "
        "img-src 'self' data: blob: https:; "
-       "connect-src 'self' https://dapi.kakao.com; "
-       "font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+       "connect-src 'self' https://dapi.kakao.com https://*.kakaocdn.net https://*.daumcdn.net; "
+       "font-src 'self' data: https://*.kakaocdn.net; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
 SECURITY_HEADERS = {
     CSP_HEADER_NAME: CSP,
     'X-Content-Type-Options': 'nosniff',

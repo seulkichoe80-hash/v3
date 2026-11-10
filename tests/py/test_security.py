@@ -22,7 +22,7 @@ class Headers(unittest.TestCase):
         self.assertIn('geolocation=()', h['permissions-policy'])
         self.assertIn('content-security-policy', h)          # 강제 모드(감시 모드가 아님)
         csp = h['content-security-policy']
-        for part in ("default-src 'self'", "frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'", 'https://dapi.kakao.com', 'https://t1.kakaocdn.net'):
+        for part in ("default-src 'self'", "frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'", 'https://dapi.kakao.com', 'https://*.kakaocdn.net'):
             self.assertIn(part, csp)
         self.assertNotIn("'unsafe-inline'", csp.split('script-src')[1].split(';')[0])   # 스크립트에는 inline 금지
 
