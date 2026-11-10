@@ -36,8 +36,8 @@
 
     <div class="sheet-tabs" role="tablist" aria-label="입력 시트">
       <button type="button" role="tab" class="sheet-tab on" id="sheet-tab-1" data-sheet="1" aria-selected="true" aria-controls="sheet-1">① 임무 입력</button>
-      <button type="button" role="tab" class="sheet-tab" id="places-sum" data-sheet="2" aria-selected="false" aria-controls="sheet-2">② ★주요지점 <small id="tab-places-n"></small></button>
-      <button type="button" role="tab" class="sheet-tab" id="sheet-tab-3" data-sheet="3" aria-selected="false" aria-controls="sheet-3">③ 항공고시보 <small id="tab-notam-n"></small></button>
+      <button type="button" role="tab" class="sheet-tab" id="places-sum" data-sheet="2" aria-selected="false" aria-controls="sheet-2">② 주요지점</button>
+      <button type="button" role="tab" class="sheet-tab" id="sheet-tab-3" data-sheet="3" aria-selected="false" aria-controls="sheet-3">③ 항공고시보</button>
     </div>
     <div class="sheet" id="sheet-1" role="tabpanel" aria-labelledby="sheet-tab-1">
     <label class="inline toggle"><input type="checkbox" id="coord-toggle"> 좌표 직접 입력</label>
@@ -56,7 +56,7 @@
         <button type="button" id="amb-clear" class="mini" title="자동값으로 되돌리기">초기화</button>
       </div>
       <div class="loc" id="amb-loc"></div>
-      <p class="hint">헬기는 위 경로(항공대 → 현장 → 병원)로, 구급차는 이 칸의 현장 → 병원으로 비교합니다. 검색·★주요지점·좌표 직접 입력 가능.</p>
+      <p class="hint">헬기는 위 경로(항공대 → 현장 → 병원)로, 구급차는 이 칸의 현장 → 병원으로 비교합니다. 검색·주요지점·좌표 직접 입력 가능.</p>
     </fieldset>
     <div class="grid2">
       <label>출발 예정시각(KST)<input id="depart" type="datetime-local"></label>
@@ -69,14 +69,19 @@
     </div>
     <div class="sheet" id="sheet-2" role="tabpanel" aria-labelledby="places-sum" hidden>
     <div id="places-box" class="places">
-      <p class="sheet-title">★ 주요지점 <small id="places-count"></small></p>
+      <p class="sheet-title">주요지점</p>
       <p class="hint" id="place-target"></p>
       <input id="place-q" type="search" placeholder="주요지점 검색 (이름·메모)" autocomplete="off">
+      <div class="chips" id="place-chips" role="group" aria-label="종류"></div>
+      <p class="recent-title" id="place-recent-title" hidden>최근 사용</p>
+      <ul id="place-recent" class="place-list recent" hidden></ul>
       <ul id="place-list" class="place-list"></ul>
+      <button id="place-more" type="button" class="ghost" hidden>더 보기</button>
       <div class="place-add">
         <b>새 주요지점</b>
         <select id="place-from" aria-label="현재 지점에서 가져오기"></select>
         <input id="place-name" placeholder="이름 (예: ○○병원 헬리패드)" maxlength="50">
+        <select id="place-cat" aria-label="종류"></select>
         <input id="place-coord" placeholder="좌표 (위에서 고른 좌표 형식)" spellcheck="false">
         <input id="place-memo" placeholder="메모 (선택, 100자)" maxlength="100">
         <button id="place-add" type="button" class="mini">추가</button> <small id="place-msg" class="hint"></small>

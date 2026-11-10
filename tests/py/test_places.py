@@ -16,6 +16,12 @@ class Contract:
         s.places_delete(a['id']); self.assertEqual([p['id'] for p in s.places_list()], [b['id']])
         # NOTAM 칸과 서로 섞이지 않음
         s.save(1, 'D1/26 NOTAMN'); self.assertEqual(len(s.places_list()), 1); self.assertEqual(sorted(s.list()), [1])
+    def test_category(self):
+        s = self.make()
+        a = s.places_save({'name': '가', 'lat': 37, 'lon': 127, 'cat': '병원'}); self.assertEqual(a['cat'], '병원')
+        b = s.places_save({'id': a['id'], 'name': '가', 'lat': 37, 'lon': 127, 'cat': '헬리패드'})   # 같은 id는 갱신
+        self.assertEqual([p['cat'] for p in s.places_list()], ['헬리패드']); self.assertEqual(s.places_save({'name': '나', 'lat': 37, 'lon': 127})['cat'], '')
+        with self.assertRaises(ValueError): s.places_save({'name': '다', 'lat': 37, 'lon': 127, 'cat': 'x' * 11})
     def test_validation(self):
         s = self.make()
         for bad in [{'name': '', 'lat': 37, 'lon': 127}, {'name': 'x' * 51, 'lat': 37, 'lon': 127},

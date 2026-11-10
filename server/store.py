@@ -173,13 +173,16 @@ class _Ops:
             raise ValueError('이름은 1~50자')
         if len(memo) > 100:
             raise ValueError('메모는 100자 이내')
+        cat = str(p.get('cat', '') or '').strip()
+        if len(cat) > 10:
+            raise ValueError('종류는 10자 이내')
         if not (math.isfinite(lat) and math.isfinite(lon) and abs(lat) <= 90 and abs(lon) <= 180):
             raise ValueError('좌표 범위 오류')
         pid = str(p.get('id') or '') or uuid.uuid4().hex[:12]
         existing = self.hall(PLACES_KEY)
         if pid not in existing and len(existing) >= MAX_PLACES:
             raise ValueError(f'주요지점은 최대 {MAX_PLACES}곳')
-        rec = {'id': pid, 'name': name, 'lat': round(lat, 6), 'lon': round(lon, 6), 'memo': memo, 'savedAt': _now()}
+        rec = {'id': pid, 'name': name, 'lat': round(lat, 6), 'lon': round(lon, 6), 'memo': memo, 'cat': cat, 'savedAt': _now()}
         self.hset(PLACES_KEY, pid, json.dumps(rec, ensure_ascii=False))
         return rec
 

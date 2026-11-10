@@ -92,7 +92,9 @@ async function init() {
   $('notam-reload').addEventListener('click', loadNotams);
   loadNotams();
   loadPlaces();
-  $('place-q').addEventListener('input', renderPlaces);
+  $('place-cat').innerHTML = PLACE_CATS.map((c) => `<option>${c}</option>`).join('');
+  $('place-more').addEventListener('click', () => { state.placeLimit = (state.placeLimit || PLACE_PAGE) + PLACE_PAGE; renderPlaces(); });
+  $('place-q').addEventListener('input', () => { state.placeLimit = PLACE_PAGE; renderPlaces(); });
   $('place-add').addEventListener('click', addPlaceFromForm);
   $('place-from').addEventListener('change', (e) => {
     const p = state.points[pointKeys().indexOf(e.target.value)];
@@ -250,7 +252,7 @@ function matchPlaces(q) {
 function setupSearch(k) {
   searchBox($(`pt-${k}-q`), $(`pt-${k}-results`), (pl) => setPointByKey(k, pl));
 }
-// 검색칸 공통: 주요지점(★)·카카오 장소검색·좌표 직접 입력 → onPick({name, lat, lon})
+// 검색칸 공통: 주요지점·카카오 장소검색·좌표 직접 입력 → onPick({name, lat, lon})
 function searchBox(q, list, onPick) {
   document.addEventListener('click', (e) => { if (!q.contains(e.target) && !list.contains(e.target)) list.innerHTML = ''; });
   q.addEventListener('keydown', (e) => { if (e.key === 'Escape') list.innerHTML = ''; });
@@ -270,7 +272,7 @@ function searchBox(q, list, onPick) {
       const query = q.value.trim();
       const favs = matchPlaces(query);
       const draw = (kakao, note = '') => {
-        list.innerHTML = favs.map((p, i) => `<li tabindex="0" class="fav" data-f="${i}">★ ${esc(p.name)}<small>${esc(p.memo || '')} ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</small></li>`).join('')
+        list.innerHTML = favs.map((p, i) => `<li tabindex="0" class="fav" data-f="${i}"><span class="tagfav">주요지점</span> ${esc(p.name)}<small>${esc(p.memo || '')} ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</small></li>`).join('')
           + kakao.map((d, i) => `<li tabindex="0" data-i="${i}">${esc(d.place_name)}<small>${esc(d.road_address_name || d.address_name)}</small></li>`).join('')
           + (note ? `<li class="empty"><small>${esc(note)}</small></li>` : '');
         list.querySelectorAll('li').forEach((li) => {
@@ -320,16 +322,35 @@ function updatePlaceFrom() {
   if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 
+const PLACE_CATS = ['항공대', '병원', '헬리패드', '기타'], RECENT_KEY = 'heliwx.recentPlaces', PLACE_PAGE = 30;
+const placeCat = (p) => (PLACE_CATS.includes(p.cat) ? p.cat : '기타');
+function recentIds() { return store.get(RECENT_KEY, []); }
+function pushRecent(id) { store.set(RECENT_KEY, [id, ...recentIds().filter((x) => x !== id)].slice(0, 5)); }
+function placeRow(p) {
+  return `<li data-id="${esc(p.id)}"><button type="button" class="pick" title="선택된 지점에 넣기">${esc(p.name)}
+      <small>${esc(formatCoord(p, fmtNow()))}${p.memo ? ' · ' + esc(p.memo) : ''}</small></button>
+      <select class="catsel" aria-label="종류 변경">${PLACE_CATS.map((c) => `<option${placeCat(p) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+      <button type="button" class="mini del">삭제</button></li>`;
+}
 function renderPlaces() {
-  const q = $('place-q').value.trim().toLowerCase();
-  const items = state.favs.filter((p) => !q || (p.name + ' ' + (p.memo || '')).toLowerCase().includes(q));
-  $('places-count').textContent = `(${state.favs.length})`; updateTabCounts();
-  $('place-list').innerHTML = items.length ? items.map((p) => `<li data-id="${esc(p.id)}"><button type="button" class="pick" title="선택된 지점(이 지점)에 넣기">★ ${esc(p.name)}
-      <small>${esc(formatCoord(p, fmtNow()))}${p.memo ? ' · ' + esc(p.memo) : ''}</small></button><button type="button" class="mini del">삭제</button></li>`).join('')
-    : `<li><small>${state.favs.length ? '검색 결과 없음' : '등록된 주요지점이 없습니다'}</small></li>`;
-  $('place-list').querySelectorAll('li[data-id]').forEach((li) => {
+  const q = $('place-q').value.trim().toLowerCase(), cat = state.placeCat || '전체';
+  const chips = ['전체', ...PLACE_CATS];
+  $('place-chips').innerHTML = chips.map((c) => `<button type="button" class="chip${c === cat ? ' on' : ''}" data-cat="${c}">${c}</button>`).join('');
+  $('place-chips').querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => { state.placeCat = b.dataset.cat; state.placeLimit = PLACE_PAGE; renderPlaces(); }));
+  const all = state.favs.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const items = all.filter((p) => (!q || (p.name + ' ' + (p.memo || '')).toLowerCase().includes(q)) && (cat === '전체' || placeCat(p) === cat));
+  const limit = state.placeLimit || PLACE_PAGE, shown = items.slice(0, limit);
+  const recent = (!q && cat === '전체') ? recentIds().map((id) => state.favs.find((x) => x.id === id)).filter(Boolean) : [];
+  $('place-recent-title').hidden = $('place-recent').hidden = !recent.length;
+  $('place-recent').innerHTML = recent.map(placeRow).join('');
+  $('place-list').innerHTML = shown.length ? shown.map(placeRow).join('')
+    : `<li><small>${state.favs.length ? '해당하는 주요지점이 없습니다' : '등록된 주요지점이 없습니다'}</small></li>`;
+  $('place-more').hidden = items.length <= limit;
+  $('place-more').textContent = `더 보기 (${items.length - limit}곳 더)`;
+  document.querySelectorAll('#place-recent li[data-id], #place-list li[data-id]').forEach((li) => {
     const p = state.favs.find((x) => x.id === li.dataset.id);
-    li.querySelector('.pick').addEventListener('click', () => { setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }); showSheet(1); });
+    li.querySelector('.pick').addEventListener('click', () => { setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }); pushRecent(p.id); showSheet(1); });
+    li.querySelector('.catsel').addEventListener('change', async (e) => { try { await savePlace({ ...p, cat: e.target.value }); } catch (err) { alert('종류 변경 실패: ' + err.message); } });
     li.querySelector('.del').addEventListener('click', async () => {
       if (!confirm(`주요지점 "${p.name}"을(를) 삭제할까요?${state.placesShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
       try { await deletePlace(p.id); } catch (e) { alert('삭제 실패: ' + e.message); }
@@ -344,8 +365,8 @@ async function savePlace(p) {
     state.favs = [...state.favs.filter((x) => x.id !== d.place.id), d.place].sort((a, b) => (a.name < b.name ? -1 : 1));
   } else {
     if (!p.name || p.name.length > 50) throw new Error('이름은 1~50자');
-    const rec = { ...p, id: Math.random().toString(16).slice(2, 14), savedAt: new Date().toISOString() };
-    state.favs = [...state.favs, rec].sort((a, b) => (a.name < b.name ? -1 : 1)); store.set(PLACES_KEY, state.favs);
+    const rec = { ...p, id: p.id || Math.random().toString(16).slice(2, 14), savedAt: new Date().toISOString() };
+    state.favs = [...state.favs.filter((x) => x.id !== rec.id), rec].sort((a, b) => (a.name < b.name ? -1 : 1)); store.set(PLACES_KEY, state.favs);
   }
   renderPlaces();
 }
@@ -363,7 +384,7 @@ async function addPlaceFromForm() {
   if (!name) { msg.textContent = '이름을 입력하세요'; return; }
   if (c.error) { msg.textContent = '좌표: ' + c.error; return; }
   try {
-    await savePlace({ name, lat: c.lat, lon: c.lon, memo: $('place-memo').value.trim() });
+    await savePlace({ name, lat: c.lat, lon: c.lon, memo: $('place-memo').value.trim(), cat: $('place-cat').value });
     $('place-name').value = $('place-coord').value = $('place-memo').value = ''; msg.textContent = '추가했습니다';
   } catch (e) { msg.textContent = '추가 실패: ' + e.message; }
 }
@@ -725,11 +746,7 @@ function setupSheets() {
   showSheet(['1', '2', '3'].includes(n) ? n : '1');
 }
 function updatePlaceTarget() { if ($('place-target')) $('place-target').textContent = `목록에서 고르면 ①시트의 "${roleLabel(state.clickTarget)}"에 들어갑니다(① 시트에서 "지도 클릭·주요지점 → 이 지점"으로 바꿀 수 있음)`; }
-function updateTabCounts() {
-  const np = state.favs.length, nn = Array.from({ length: state.slotCount }, (_, k) => ($(`notam-${k + 1}`)?.value || '').trim()).filter(Boolean).length;
-  if ($('tab-places-n')) $('tab-places-n').textContent = np ? `(${np})` : '';
-  if ($('tab-notam-n')) $('tab-notam-n').textContent = nn ? `(${nn})` : '';
-}
+function updateTabCounts() { /* 탭에는 개수를 표시하지 않음 */ }
 function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM (${(nm * 1.852).toFixed(1)}km)`; }
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
 function downloadHistory() {

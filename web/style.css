@@ -174,7 +174,7 @@ body.coords-on .place .loc { display: none; }
 .places { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 0 0 10px; font-size: 13px; }
 .places > summary { cursor: pointer; font-weight: 700; color: var(--accent); }
 .places input { margin-top: 6px; }
-.place-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow: auto; }
+.place-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 300px; overflow: auto; }
 .place-list li { display: flex; gap: 6px; align-items: center; padding: 4px 2px; border-bottom: 1px solid #f0f2f4; font-size: 12px; }
 .place-list .pick { flex: 1; text-align: left; border: 0; background: none; cursor: pointer; padding: 2px; font: inherit; color: inherit; }
 .place-list .pick:hover { background: #eef5fc; }
@@ -277,3 +277,11 @@ table.kv td { white-space: normal; }
 .sheet[hidden] { display: none; }
 .sheet-title { margin: 0 0 6px; font-weight: 700; color: var(--accent); }
 @media (max-width: 760px) { .sheet-tab { font-size: 12.5px; padding: 8px 2px; } }
+
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 2px; }
+.chip { border: 1px solid #b9c7bd; background: #f3f7f4; color: #26412f; border-radius: 14px; padding: 4px 11px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.chip.on { background: #1d6f42; border-color: #1d6f42; color: #fff; }
+.recent-title { margin: 8px 0 0; font-size: 12px; font-weight: 800; color: #1f4f82; }
+.place-list.recent { max-height: none; background: #f4f8fc; border-radius: 6px; padding: 2px 4px; }
+.place-list .catsel { font-size: 11.5px; padding: 2px; border: 1px solid #c5ccd3; border-radius: 4px; background: #fff; }
+.tagfav { display: inline-block; font-size: 11px; font-weight: 700; color: #1d6f42; border: 1px solid #1d6f42; border-radius: 8px; padding: 0 5px; margin-right: 4px; }

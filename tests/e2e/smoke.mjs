@@ -45,9 +45,9 @@ await page.waitForFunction(() => /테스트헬리패드/.test(document.querySele
 await page.click('#place-list li:has-text("테스트헬리패드") .pick');
 if ((await page.inputValue('#pt-to-name')) !== '테스트헬리패드') fail('주요지점 선택이 목적지에 반영 안 됨');
 if (!(await page.isVisible('#sheet-1')) || (await page.isVisible('#sheet-2'))) fail('주요지점을 고르면 ①시트로 돌아와야 함');
-if (!/\(\d+\)/.test(await page.textContent('#places-sum'))) fail('②시트 탭에 주요지점 개수가 없음');
+if (/[★(\d]/.test(await page.textContent('#places-sum'))) fail('②시트 탭에 별·개수가 없어야 함');
 await page.fill('#pt-from-q', '헬리'); await page.dispatchEvent('#pt-from-q', 'input');
-await page.waitForFunction(() => /★\s*테스트헬리패드/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 }).catch(() => fail('카드 검색에 주요지점 안 나옴'));
+await page.waitForFunction(() => /주요지점\s*테스트헬리패드/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 }).catch(() => fail('카드 검색에 주요지점 안 나옴'));
 await page.press('#pt-from-q', 'Enter');
 if ((await page.inputValue('#pt-from-name')) !== '테스트헬리패드') fail('카드 검색 결과 선택 안 됨');
 await page.click('#places-sum');
