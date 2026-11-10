@@ -298,3 +298,10 @@ table.kv td { white-space: normal; }
 
 .info-btn { border: 1px solid #9fb3c8; background: #eef4fb; color: #1f4f82; border-radius: 50%; width: 22px; height: 22px; padding: 0; font-size: 13px; line-height: 1; cursor: pointer; }
 .hint:empty { display: none; }
+
+/* 최근 사용 목록과 아래 전체 목록의 열이 어긋나지 않게: 스크롤바 자리를 똑같이 확보 */
+.place-list, .place-list.recent { scrollbar-gutter: stable; padding: 0; }
+.place-list li { padding: 4px 6px; }
+.place-list.recent { overflow-y: auto; max-height: none; }
+.place-list.recent { background: none; }
+.place-list.recent li { background: #f4f8fc; border-bottom-color: #e3ebf3; }

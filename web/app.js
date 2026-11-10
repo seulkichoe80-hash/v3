@@ -362,7 +362,7 @@ function renderPlaces() {
   $('place-more').textContent = `더 보기 (${items.length - limit}곳 더)`;
   document.querySelectorAll('#place-recent li[data-id], #place-list li[data-id]').forEach((li) => {
     const p = state.favs.find((x) => x.id === li.dataset.id);
-    li.querySelector('.pick').addEventListener('click', () => { setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }); pushRecent(p.id); showSheet(1); });
+    li.querySelector('.pick').addEventListener('click', () => { setPointByKey(state.clickTarget, { name: p.name, lat: p.lat, lon: p.lon }); pushRecent(p.id); showSheet(1); renderPlaces(); });
     li.querySelector('.catsel').addEventListener('change', async (e) => { try { await savePlace({ ...p, cat: e.target.value }); } catch (err) { alert('종류 변경 실패: ' + err.message); } });
     li.querySelector('.del').addEventListener('click', async () => {
       if (!confirm(`주요지점 "${p.name}"을(를) 삭제할까요?${state.placesShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
