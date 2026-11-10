@@ -37,6 +37,7 @@ const rec = await page.evaluate(() => window.__kk.map((x) => ({ name: x.name, c:
 const circle = rec.find((x) => x.name === 'Circle' && x.c === '#d6201a');
 if (!circle || !(circle.r > 0)) fail('빨간 NOTAM 원이 안 그려짐: ' + JSON.stringify(rec.filter((x) => x.name === 'Circle')));
 const label = rec.find((x) => x.name === 'CustomOverlay' && /nt-label/.test(x.html || ''));
+if (!label || !/\d+\/\d+ \d\d:\d\d ~ .*KST/.test(label.html)) fail('라벨에 유효시간이 없음: ' + (label && label.html));
 if (!label || !/D2840\/26/.test(label.html) || !/반경 [\d.]+NM/.test(label.html) || !/\d/.test(label.html.split('<br>')[1] || '')) fail('좌표·반경 라벨 이상: ' + (label && label.html));
 if (!/📍/.test(await page.textContent('#notam-list')) || !/반경 [\d.]+NM/.test(await page.textContent('#notam-list'))) fail('목록에 좌표·반경 줄 없음');
 // ③ 판단 실행 후에는 지도를 눌러도 출발·목적지가 바뀌지 않는다

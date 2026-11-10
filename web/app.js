@@ -781,6 +781,11 @@ function drawRouteOnly() {
 }
 
 // ---------- NOTAM 지도 표시(상시): 붙여넣은 D 시리즈 NOTAM을 판단 실행 전에도 빨간 원·좌표·반경으로 그림 ----------
+// 유효시간(KST): 시작 ~ 종료(PERM·추정(EST) 표시)
+function notamPeriod(n) {
+  const a = n.start ? kstStr(n.start, true) : '?', b = n.endPerm ? 'PERM' : n.end ? kstStr(n.end, true) : '?';
+  return `${a} ~ ${b}${n.endEst ? '(EST)' : ''} KST`;
+}
 function currentNotams() {
   return splitNotams(notamText()).map(parseNotam).filter((n) => n.id && n.series === 'D' && n.center);
 }
@@ -789,7 +794,7 @@ function notamLayer(list, bounds, extend) {
   for (const n of list) {
     const off = n.activeDuringFlight === false;      // 판단 실행 결과로 비행 시간대 미발효로 확인된 NOTAM은 점선·옅게
     add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
-    add(new k.CustomOverlay({ position: ll(n.center), yAnchor: 1.2, content: `<div class="nt-label${off ? ' off' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}</div>` }));
+    add(new k.CustomOverlay({ position: ll(n.center), yAnchor: 1.2, content: `<div class="nt-label${off ? ' off' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
     if (extend && bounds) bounds.extend(ll(n.center));
   }
 }
