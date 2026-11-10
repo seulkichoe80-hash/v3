@@ -52,6 +52,8 @@ await page.reload(); await page.waitForSelector('#map-off:not([hidden])');
 if (!(await page.evaluate(() => document.body.classList.contains('big') && document.documentElement.classList.contains('dark')))) fail('화면 설정이 기억되지 않음');
 await page.click('#btn-big'); await page.click('#btn-dark');
 if (await page.isVisible('#help-panel')) fail('사용법은 기본 숨김'); await page.click('#btn-help'); if (!(await page.isVisible('#help-panel'))) fail('사용법 열기 안 됨');
+// 새로고침하면 출발지도 비어 있다(최근 경로 목록에서만 불러옴)
+if ((await page.inputValue('#pt-from-name')) !== '' || (await page.inputValue('#pt-from-coord')) !== '') fail('새로고침 후 출발지가 남아 있음');
 // 오래된 판단 안내(20분 경과)
 await set('#pt-from-coord', '36.50, 127.25'); await set('#pt-to-coord', '37.50, 127.05'); await page.click('#run'); await ran();
 await page.clock.fastForward(21 * 60 * 1000); await page.waitForTimeout(100);

@@ -662,9 +662,6 @@ function setupExtras() {
   $('btn-dark').addEventListener('click', () => toggleLook('dark'));
   applyLook();
   $('data-warn').addEventListener('click', (e) => { if (e.target.closest('#retry-run')) run(); });
-  // 마지막으로 쓴 출발지를 처음부터 채워 둠(출발지가 비어 있을 때만)
-  const r0 = loadRoutes()[0];
-  if (r0 && state.points[0] && !Number.isFinite(state.points[0].lat)) { const f = r0.pts[0]; Object.assign(state.points[0], { name: f.name, lat: f.lat, lon: f.lon, text: formatCoord(f, fmtNow()) }); renderPoints(); }
 }
 
 // ---------- 낡은 화면 감지 ----------
