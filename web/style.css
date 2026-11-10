@@ -295,3 +295,6 @@ table.kv td { white-space: normal; }
 
 .amb-line .search input { font-size: 13px; padding-left: 8px; padding-right: 6px; text-overflow: clip; }
 .amb-line .search input::placeholder { font-size: 12.5px; }
+
+.info-btn { border: 1px solid #9fb3c8; background: #eef4fb; color: #1f4f82; border-radius: 50%; width: 22px; height: 22px; padding: 0; font-size: 13px; line-height: 1; cursor: pointer; }
+.hint:empty { display: none; }

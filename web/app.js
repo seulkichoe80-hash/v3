@@ -80,6 +80,7 @@ async function init() {
   $('usage-csv').addEventListener('click', downloadUsage);
   wireAmb();
   setupSheets();
+  document.querySelectorAll('.info-btn').forEach((b) => b.addEventListener('click', () => { const t = $(b.dataset.target); if (t) t.hidden = !t.hidden; }));
   refreshUsage();
   $('cruise').value = cc.config.cruiseKt; $('prep').value = (cc.config.dispatch || {}).heliPrepMin ?? 15;
   $('depart').value = kstInputNow();
@@ -322,7 +323,7 @@ async function loadPlaces() {
   } catch (e) { err = e.message; }
   if (!shared) list = store.get(PLACES_KEY, []);
   state.placesShared = shared; state.favs = list;
-  $('places-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})` : shared ? '상황실 공유 저장' : '공유 저장소 미연결 — 이 브라우저에만 저장';
+  $('places-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})` : shared ? '' : '공유 저장소 미연결 — 이 브라우저에만 저장';   // 정상일 때는 안내를 숨김
   renderPlaces();
 }
 
@@ -415,7 +416,7 @@ async function loadNotams() {
   for (const [k, v] of Object.entries(slots)) state.slots[+k] = { text: v.text, savedText: v.text, savedAt: v.savedAt };
   state.slotCount = Math.min(MAX_SLOTS, Math.max(2, state.slotCount, ...Object.keys(state.slots).map(Number)));
   $('notam-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})`
-    : shared ? '상황실 공유 저장 — 저장하면 모든 사용자에게 보입니다' : '공유 저장소 미연결 — 이 브라우저에만 저장됩니다';
+    : shared ? '' : '공유 저장소 미연결 — 이 브라우저에만 저장됩니다';   // 정상(공유 저장)일 때는 안내를 숨김
   renderSlots();
 }
 
@@ -735,7 +736,7 @@ function wireAmb() {
 function showAmb() {
   if (!$('amb-loc')) return;
   const pts = readyPoints().pts, d = ambPoints(pts);
-  const fmt = (x, auto) => (x ? `📍 ${x.name} (${x.lat.toFixed(4)}, ${x.lon.toFixed(4)})${auto ? ' · 자동' : ''}` : '미지정');
+  const fmt = (x, auto) => (x ? `📍 ${x.name} (${x.lat.toFixed(4)}, ${x.lon.toFixed(4)})${auto ? ' · 자동' : ''}` : '입력 필요');
   $('amb-loc').textContent = `${fmt(d.from, !state.amb.from && d.from)} → ${fmt(d.to, !state.amb.to && d.to)}`;
 }
 // 입력이 없으면 경유지 1(현장)→목적지(병원)을 쓴다. 경유지도 없으면 null
@@ -750,14 +751,12 @@ function showSheet(n) {
   document.querySelectorAll('.sheet-tab').forEach((b) => { const on = b.dataset.sheet === n; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
   document.querySelectorAll('.sheet').forEach((d) => { d.hidden = d.id !== 'sheet-' + n; });
   try { sessionStorage.setItem(SHEET_KEY, n); } catch { /* 저장 불가여도 동작 */ }
-  if (n === '2') updatePlaceTarget();
 }
 function setupSheets() {
   document.querySelectorAll('.sheet-tab').forEach((b) => b.addEventListener('click', () => showSheet(b.dataset.sheet)));
   let n = '1'; try { n = sessionStorage.getItem(SHEET_KEY) || '1'; } catch { /* 무시 */ }
   showSheet(['1', '2', '3'].includes(n) ? n : '1');
 }
-function updatePlaceTarget() { if ($('place-target')) $('place-target').textContent = `목록에서 고르면 ①시트의 "${roleLabel(state.clickTarget)}"에 들어갑니다(① 시트에서 "지도 클릭·주요지점 → 이 지점"으로 바꿀 수 있음)`; }
 function updateTabCounts() { /* 탭에는 개수를 표시하지 않음 */ }
 function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM (${(nm * 1.852).toFixed(1)}km)`; }
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
