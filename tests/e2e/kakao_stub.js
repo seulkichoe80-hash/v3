@@ -18,6 +18,7 @@
     services: { Status,
       Places: function () { this.keywordSearch = (q, cb) => { const r = DB.filter((d) => d.place_name.includes(q.replace(/\s/g, '').slice(0, 2))); setTimeout(() => cb(r, r.length ? Status.OK : Status.ZERO_RESULT), 10); }; },
       Geocoder: function () {
+        this.addressSearch = (q, cb) => setTimeout(() => (/평남로/.test(q) ? cb([{ address_name: '경기 평택시 평남로 616', x: '127.0770', y: '37.0160' }], Status.OK) : cb([], Status.ZERO_RESULT)), 10);
         this.coord2RegionCode = (x, y, cb) => setTimeout(() => cb([{ region_type: 'H', region_1depth_name: '경기도', region_2depth_name: '수원시 영통구' }], Status.OK), 5);
         this.coord2Address = (x, y, cb) => setTimeout(() => cb([{ address: { address_name: '테스트 주소' } }], Status.OK), 5);
       } } } };

@@ -49,6 +49,14 @@ await page.fill('#amb-to-q', '정부대전'); await page.dispatchEvent('#amb-to-
 await page.waitForFunction(() => document.querySelectorAll('#amb-to-results li').length > 0, null, { timeout: 5000 });
 await page.click('h2#h-input'); await page.waitForTimeout(100);
 if ((await page.locator('#amb-to-results li').count()) !== 0) fail('바깥을 눌러도 목록이 안 닫힘');
+// 구급차 칸: 장소명이 아닌 주소로도 검색된다(키워드 검색에 없는 주소)
+await page.click('#sheet-tab-1');
+await page.fill('#amb-from-q', '경기 평택시 평남로 616'); await page.dispatchEvent('#amb-from-q', 'input');
+await page.waitForFunction(() => /경기 평택시 평남로 616/.test(document.querySelector('#amb-from-results').textContent), null, { timeout: 5000 }).catch(() => fail('주소 검색 결과가 안 나옴'));
+await page.click('#amb-from-results li:has-text("평남로")');
+if (!/평남로 616/.test(await page.textContent('#amb-loc'))) fail('주소로 고른 현장이 반영되지 않음');
+await page.fill('#amb-to-q', '존재하지않는곳xyz'); await page.dispatchEvent('#amb-to-q', 'input');
+await page.waitForFunction(() => /검색 결과 없음/.test(document.querySelector('#amb-to-results').textContent), null, { timeout: 5000 }).catch(() => fail('결과 없음 안내가 안 나옴'));
 if (errors.length) fail('페이지 오류: ' + errors.join(' / '));
 console.log('PASS kakao');
 await browser.close(); srv.kill();

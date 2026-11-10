@@ -289,12 +289,24 @@ function searchBox(q, list, onPick) {
       if (!state.placeSvc || !state.kakao) { draw([], favs.length ? '' : '카카오 장소검색 불가(지도 미연결) — 주요지점 또는 좌표 직접 입력 사용'); return; }
       if (query.length < 2) { draw([], favs.length ? '' : '두 글자 이상 입력'); return; }
       draw([], '검색 중…');
-      state.placeSvc.keywordSearch(query, (data, st) => {
+      // 장소명(카카오 키워드 검색)과 주소(지번·도로명)를 함께 찾아 합친다. 응답이 6초 넘게 없으면 오류 안내
+      const S = state.kakao.services.Status, wait = (fn) => new Promise((res) => {
+        const t = setTimeout(() => res({ data: [], st: 'TIMEOUT' }), 6000);
+        try { fn((data, st) => { clearTimeout(t); res({ data: data || [], st }); }); } catch { clearTimeout(t); res({ data: [], st: 'ERROR' }); }
+      });
+      Promise.all([
+        wait((cb) => state.placeSvc.keywordSearch(query, cb)),
+        wait((cb) => (state.geocoder ? state.geocoder.addressSearch(query, cb) : cb([], S.ZERO_RESULT))),
+      ]).then(([kw, ad]) => {
         if (q.value.trim() !== query) return;                       // 그 사이 검색어가 바뀜
-        const S = state.kakao.services.Status;
-        if (st === S.OK) draw(data.slice(0, 8));
-        else if (st === S.ZERO_RESULT) draw([], favs.length ? '' : '검색 결과 없음');
-        else draw([], '카카오 검색 오류 — 잠시 후 다시 시도');
+        const docs = [
+          ...(kw.st === S.OK ? kw.data.slice(0, 6) : []),
+          ...(ad.st === S.OK ? ad.data.slice(0, 4).map((a) => ({ place_name: a.address_name, address_name: '주소', y: a.y, x: a.x })) : []),
+        ];
+        if (docs.length) draw(docs);
+        else if (kw.st === 'TIMEOUT' && ad.st === 'TIMEOUT') draw([], '카카오 응답 없음 — 잠시 후 다시 시도하거나 좌표를 입력하세요');
+        else if ([kw.st, ad.st].some((x) => x !== S.ZERO_RESULT && x !== S.OK)) draw([], '카카오 검색 오류 — 잠시 후 다시 시도');
+        else draw([], favs.length ? '' : '검색 결과 없음 — 장소명 또는 주소(예: 경기 평택시 평남로 616)를 더 자세히 입력하세요');
       });
     }, 250);
   });
