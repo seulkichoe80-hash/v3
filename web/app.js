@@ -92,7 +92,7 @@ async function init() {
   $('notam-reload').addEventListener('click', loadNotams);
   loadNotams();
   loadPlaces();
-  $('place-cat').innerHTML = PLACE_CATS.map((c) => `<option>${c}</option>`).join('');
+  $('place-cat').innerHTML = PLACE_CATS.map((c) => `<option>${c}</option>`).join(''); $('place-cat').value = '기타';
   $('place-more').addEventListener('click', () => { state.placeLimit = (state.placeLimit || PLACE_PAGE) + PLACE_PAGE; renderPlaces(); });
   $('place-q').addEventListener('input', () => { state.placeLimit = PLACE_PAGE; renderPlaces(); });
   $('place-add').addEventListener('click', addPlaceFromForm);

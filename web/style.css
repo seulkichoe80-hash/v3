@@ -285,3 +285,10 @@ table.kv td { white-space: normal; }
 .place-list.recent { max-height: none; background: #f4f8fc; border-radius: 6px; padding: 2px 4px; }
 .place-list .catsel { font-size: 11.5px; padding: 2px; border: 1px solid #c5ccd3; border-radius: 4px; background: #fff; }
 .tagfav { display: inline-block; font-size: 11px; font-weight: 700; color: #1d6f42; border: 1px solid #1d6f42; border-radius: 8px; padding: 0 5px; margin-right: 4px; }
+
+/* 주요지점 목록: 이름을 넓게, 종류 선택·삭제는 글자 폭만큼만 */
+.place-list li { flex-wrap: nowrap; }
+.place-list .pick { flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: anywhere; line-height: 1.35; }
+.place-list .pick small { display: block; }
+.place-list .catsel { flex: 0 0 auto; width: 5.4em; min-width: 0; padding: 2px 1px; font-size: 11.5px; }
+.place-list .del { flex: 0 0 auto; width: auto; white-space: nowrap; padding: 3px 7px; }
