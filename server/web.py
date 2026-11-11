@@ -54,14 +54,14 @@ def _same_origin(headers):
     return urlparse(origin).netloc == host.split(',')[0].strip()
 
 
-def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None, notam_store=None, client_ip='', kakao_rest_key=''):
+def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None, notam_store=None, client_ip='', kakao_rest_key='', vworld_key=''):
     """→ (status, headers, body bytes). access_code가 비어 있으면 접속코드 없이 개방."""
     from urllib.parse import parse_qs
     path, _, qs = path.partition('?')
     path_q = parse_qs(qs)
     if method == 'GET' and path == '/api/client-config':
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
-                           'serverLog': bool(log_path), 'notamShared': notam_store is not None, 'usageShared': notam_store is not None, 'driveKakao': bool(kakao_rest_key),
+                           'serverLog': bool(log_path), 'notamShared': notam_store is not None, 'usageShared': notam_store is not None, 'driveKakao': bool(kakao_rest_key), 'vworldKey': vworld_key,
                            'version': (os.environ.get('VERCEL_GIT_COMMIT_SHA') or 'local')[:7]})
     if method not in ('GET', 'HEAD') and not _same_origin(headers):
         return _json(403, {'error': '허용되지 않은 출처의 요청입니다'})
@@ -242,7 +242,7 @@ def _places(method, path, body, store):
         return _json(502, {'error': f'공유 저장소 오류: {type(e).__name__}'})
 
 
-def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127.0.0.1', access_code='', notam_store=None, kakao_rest_key=''):
+def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127.0.0.1', access_code='', notam_store=None, kakao_rest_key='', vworld_key=''):
     web_dir = os.path.realpath(web_dir)
 
     class H(BaseHTTPRequestHandler):
@@ -262,7 +262,7 @@ def make_server(port, client, config, kakao_js_key, log_path, web_dir, host='127
             body = self.rfile.read(min(n, 30000)) if n else b''
             self._send(*handle_api(method, self.path, dict(self.headers), body, client=client, config=config,
                                    kakao_js_key=kakao_js_key, access_code=access_code, log_path=log_path, notam_store=notam_store,
-                                   client_ip=self.client_address[0], kakao_rest_key=kakao_rest_key))
+                                   client_ip=self.client_address[0], kakao_rest_key=kakao_rest_key, vworld_key=vworld_key))
 
         def do_GET(self):
             path = self.path.split('?')[0]

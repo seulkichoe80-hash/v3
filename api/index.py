@@ -1,5 +1,5 @@
 """Vercel 서버리스 함수 입구. 모든 /api/* 요청이 여기로 온다(vercel.json rewrites).
-환경변수: KMA_AUTH_KEY(기상청 API허브 키), KAKAO_JS_KEY(카카오 JavaScript 키), KAKAO_REST_KEY(카카오 REST API 키, 선택: 구급차 이동시간), ACCESS_CODE(비우면 접속코드 없음)."""
+환경변수: KMA_AUTH_KEY(기상청 API허브 키), KAKAO_JS_KEY(카카오 JavaScript 키), KAKAO_REST_KEY(카카오 REST API 키, 선택: 구급차 이동시간), VWORLD_KEY(브이월드 인증키, 선택: 항공사진), ACCESS_CODE(비우면 접속코드 없음)."""
 import json, os, sys
 from http.server import BaseHTTPRequestHandler
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +23,7 @@ class handler(BaseHTTPRequestHandler):
                                           kakao_js_key=os.environ.get('KAKAO_JS_KEY', ''),
                                           access_code=os.environ.get('ACCESS_CODE', ''), log_path=None, notam_store=STORE,
                                           client_ip=(self.headers.get('x-forwarded-for') or self.headers.get('x-real-ip') or '').split(',')[0].strip(),
-                                          kakao_rest_key=os.environ.get('KAKAO_REST_KEY', ''))
+                                          kakao_rest_key=os.environ.get('KAKAO_REST_KEY', ''), vworld_key=os.environ.get('VWORLD_KEY', ''))
         self.send_response(status)
         for k, v in headers.items():
             self.send_header(k, v)

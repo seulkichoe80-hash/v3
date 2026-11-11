@@ -32,6 +32,7 @@ def main():
                       os.path.join(ROOT, 'logs', 'history.csv'), os.path.join(ROOT, 'web'),
                       access_code=os.environ.get('ACCESS_CODE', ''),
                       kakao_rest_key=os.environ.get('KAKAO_REST_KEY') or local.get('kakaoRestKey', ''),
+                      vworld_key=os.environ.get('VWORLD_KEY') or local.get('vworldKey', ''),
                       notam_store=store)
     url = f'http://localhost:{a.port}/'
     print(f'재난하늘119(재난 긴급 항공출동 판단 시스템) 실행 중: {url}  {"(시험 자료)" if a.mock else ""}  종료: Ctrl+C')

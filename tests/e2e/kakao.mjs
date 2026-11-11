@@ -57,6 +57,8 @@ await page.click('#amb-from-results li:has-text("평남로")');
 if (!/평남로 616/.test(await page.textContent('#amb-loc'))) fail('주소로 고른 현장이 반영되지 않음');
 await page.fill('#amb-to-q', '존재하지않는곳xyz'); await page.dispatchEvent('#amb-to-q', 'input');
 await page.waitForFunction(() => /검색 결과 없음/.test(document.querySelector('#amb-to-results').textContent), null, { timeout: 5000 }).catch(() => fail('결과 없음 안내가 안 나옴'));
+// 브이월드 키가 없으면 [항공사진] 버튼은 숨김
+if (await page.isVisible('#mt-aerial')) fail('키가 없는데 [항공사진] 버튼이 보임');
 // 지도 종류 전환(일반 ↔ 위성) + 새로고침 후 유지
 if (!(await page.isVisible('#maptype'))) fail('지도 종류 버튼이 안 보임');
 await page.click('#mt-sky'); if (!(await page.evaluate(() => (window.__mt || []).slice(-1)[0] === 'HYBRID'))) fail('위성 전환이 지도에 반영되지 않음');

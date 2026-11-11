@@ -127,9 +127,12 @@
   <!-- 지도 -->
   <section class="panel map-wrap" aria-label="지도">
     <div id="map"></div>
+    <div id="map2" hidden></div>
+    <div class="map-note" id="map-note" hidden></div>
     <div class="maptype" id="maptype" role="group" aria-label="지도 종류" hidden>
       <button type="button" id="mt-road" class="on" aria-pressed="true">일반</button>
       <button type="button" id="mt-sky" aria-pressed="false">위성</button>
+      <button type="button" id="mt-aerial" aria-pressed="false" hidden title="국토교통부 브이월드 항공사진">항공사진</button>
     </div>
     <div class="map-off" id="map-off" hidden></div>
     <div class="legend"><span class="g RED">제한</span><span class="g YELLOW">주의</span><span class="g GREEN">가능</span><span class="g NA">자료없음</span><span class="nt">○ NOTAM</span><span class="pa">▭ 비행금지구역</span><span class="lt">✕ 낙뢰</span></div>

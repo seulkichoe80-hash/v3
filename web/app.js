@@ -59,7 +59,7 @@ async function init() {
   const tick = () => { $('clock').textContent = 'KST ' + kstStr(new Date(), true); };
   tick(); setInterval(tick, 1000);
   const cc = await (await fetch('/api/client-config', { cache: 'no-store' })).json();
-  state.config = cc.config; state.version = cc.version || '';
+  state.config = cc.config; state.version = cc.version || ''; state.vworldKey = cc.vworldKey || '';
   $('ver').textContent = state.version ? `버전 ${state.version}` : '';
   $('reload-btn').addEventListener('click', () => location.reload()); state.serverLog = cc.serverLog; state.usageShared = !!cc.usageShared;
   if (cc.needsCode) {
@@ -153,16 +153,7 @@ function loadKakao(key) {
         state.geocoder = new k.services.Geocoder();
         state.placeSvc = new k.services.Places();
         setTimeout(syncMapNotams, 0);     // 지도가 준비되면 이미 입력·저장된 NOTAM을 바로 표시
-        k.event.addListener(state.map, 'click', (e) => {
-          if (!$('map-click-on').checked) { $('run-msg').textContent = '지도 클릭으로 지점을 바꾸지 않도록 잠겨 있습니다(판단 실행 후). 바꾸려면 "지도 클릭으로 지점 지정"을 켜세요.'; return; }
-          const which = state.clickTarget;
-          const ll = e.latLng;
-          const p = { name: `지도 지점(${ll.getLat().toFixed(4)}, ${ll.getLng().toFixed(4)})`, lat: ll.getLat(), lon: ll.getLng() };
-          state.geocoder.coord2Address(p.lon, p.lat, (res, st) => {
-            if (st === k.services.Status.OK && res[0]) p.name = (res[0].road_address || res[0].address).address_name;
-            setPointByKey(which, p);
-          });
-        });
+        k.event.addListener(state.map, 'click', (e) => mapClickAt(e.latLng.getLat(), e.latLng.getLng()));
       });
     } catch (e) { clearTimeout(timer); kakaoFailed('카카오맵 초기화 실패: ' + e.message); }
   };
@@ -919,21 +910,102 @@ function drawRouteOnly() {
   if (state.map && !bad.length && pts.length >= 2) drawMap(null, null, pts);
 }
 
+
+// ---------- 지도에서 지점 지정(카카오·항공사진 공통) ----------
+function mapClickAt(lat, lon) {
+  if (!$('map-click-on').checked) { $('run-msg').textContent = '지도 클릭으로 지점을 바꾸지 않도록 잠겨 있습니다(판단 실행 후). 바꾸려면 "지도 클릭으로 지점 지정"을 켜세요.'; return; }
+  const which = state.clickTarget;
+  const p = { name: `지도 지점(${lat.toFixed(4)}, ${lon.toFixed(4)})`, lat, lon };
+  state.geocoder.coord2Address(p.lon, p.lat, (res, st) => {
+    if (st === state.kakao.services.Status.OK && res[0]) p.name = (res[0].road_address || res[0].address).address_name;
+    setPointByKey(which, p);
+  });
+}
+
+// ---------- 항공사진(국토교통부 브이월드) 보기: 고해상도 항공사진 위에 경로·NOTAM·비행금지구역을 같은 좌표로 그림 ----------
+const AERIAL = { map: null, group: null, on: false, errs: 0 };
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/web/vendor/leaflet.css'; document.head.appendChild(l);
+    const sc = document.createElement('script'); sc.src = '/web/vendor/leaflet.js'; sc.onload = res; sc.onerror = () => rej(new Error('항공사진 지도 모듈을 불러오지 못했습니다'));
+    document.head.appendChild(sc);
+  });
+}
+function noteMap(msg) { const n = $('map-note'); n.textContent = msg || ''; n.hidden = !msg; }
+async function setAerial(on) {
+  if (on === AERIAL.on) return;
+  const kb = state.map.getBounds();
+  if (on) {
+    try { await loadLeaflet(); } catch (e) { noteMap(e.message); $('mt-road').click(); return; }
+    $('map').style.visibility = 'hidden'; $('map2').hidden = false;
+    if (!AERIAL.map) {
+      const key = encodeURIComponent(state.vworldKey), L = window.L;
+      AERIAL.map = L.map('map2', { zoomControl: true, attributionControl: true, maxZoom: 19, minZoom: 5 });
+      const tile = (layer, ext, extra = {}) => L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${key}/${layer}/{z}/{y}/{x}.${ext}`, { maxZoom: 19, maxNativeZoom: 19, attribution: '© 국토교통부 브이월드', ...extra });
+      const sat = tile('Satellite', 'jpeg'); sat.on('tileerror', () => { AERIAL.errs++; if (AERIAL.errs === 3) noteMap('항공사진을 불러오지 못하고 있습니다(인증키·사용 도메인 확인 또는 일시 장애)'); });
+      sat.on('tileload', () => { if (AERIAL.errs) { AERIAL.errs = 0; noteMap(''); } });
+      sat.addTo(AERIAL.map); tile('Hybrid', 'png', { pane: 'overlayPane' }).addTo(AERIAL.map);
+      AERIAL.group = L.layerGroup().addTo(AERIAL.map);
+      AERIAL.map.on('click', (e) => mapClickAt(e.latlng.lat, e.latlng.lng));
+    }
+    AERIAL.on = true; AERIAL.map.invalidateSize();
+    const sw = kb.getSouthWest(), ne = kb.getNorthEast();
+    AERIAL.map.fitBounds([[sw.getLat(), sw.getLng()], [ne.getLat(), ne.getLng()]]);
+    drawAerial(state.last ? state.last.result : null, readyPoints().pts);
+  } else {
+    AERIAL.on = false; noteMap('');
+    if (AERIAL.map) {
+      const b = AERIAL.map.getBounds(), k = state.kakao;
+      $('map2').hidden = true; $('map').style.visibility = '';
+      state.map.relayout();
+      const kb2 = new k.LatLngBounds(); kb2.extend(new k.LatLng(b.getSouth(), b.getWest())); kb2.extend(new k.LatLng(b.getNorth(), b.getEast()));
+      state.map.setBounds(kb2, 0, 0, 0, 0);
+    }
+  }
+}
+function drawAerial(result, pts) {
+  if (!AERIAL.on || !AERIAL.map) return;
+  const L = window.L, g = AERIAL.group; g.clearLayers();
+  for (const a of AREAS) {
+    const col = a.color;
+    L.polygon(a.poly.map((p) => [p.lat, p.lon]), { color: col, weight: 2, dashArray: '6 5', fillColor: col, fillOpacity: 0.12 }).addTo(g);
+    L.tooltip({ permanent: true, direction: 'center', className: 'ar-tip', opacity: 1 }).setContent(`${a.short} ${a.kind === 'P' ? '비행금지' : '비행제한'}`).setLatLng([a.label.lat, a.label.lon]).addTo(g);
+  }
+  const list = result ? result.notams.filter((n) => n.inScope && n.center) : currentNotams();
+  list.forEach((n) => {
+    const off = n.relation === 'CLEAR' || n.activeDuringFlight === false;
+    L.circle([n.center.lat, n.center.lon], { radius: n.radiusNm * 1852, color: '#ff2d20', weight: 3, dashArray: off ? '8 6' : null, opacity: off ? 0.7 : 1, fillColor: '#ff2d20', fillOpacity: off ? 0.08 : 0.2 }).addTo(g);
+    L.tooltip({ permanent: true, direction: 'top', className: 'nt-tip', opacity: 1 }).setContent(`${esc(n.id || 'NOTAM')}<br>반경 ${esc(fmtNm(n.radiusNm))}<br>${esc(notamPeriod(n))}`).setLatLng([n.center.lat, n.center.lon]).addTo(g);
+  });
+  if (pts && pts.length >= 2) {
+    const ll = pts.map((p) => [p.lat, p.lon]);
+    L.polyline(ll, { color: '#00e5ff', weight: 5, opacity: 0.95 }).addTo(g);
+    pts.forEach((p, i) => {
+      L.circleMarker([p.lat, p.lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#0b4f8a', fillOpacity: 1 }).addTo(g)
+        .bindTooltip(`${i === 0 ? '출발 ' : i === pts.length - 1 ? '목적 ' : `경유${i} `}${esc(p.name)}`, { permanent: true, direction: 'right', className: 'pt-tip', opacity: 1 });
+    });
+  }
+}
+
 // 지도 종류 전환: 일반 ↔ 위성(스카이뷰 + 지명 겹침). 선택은 이 브라우저에 기억한다.
 const MAPTYPE_KEY = 'heliwx.maptype';
 function setMapType(kind) {
   const k = state.kakao; if (!k || !state.map) return;
-  state.map.setMapTypeId(kind === 'sky' ? k.MapTypeId.HYBRID : k.MapTypeId.ROADMAP);
-  $('mt-road').classList.toggle('on', kind !== 'sky'); $('mt-sky').classList.toggle('on', kind === 'sky');
-  $('mt-road').setAttribute('aria-pressed', kind !== 'sky' ? 'true' : 'false'); $('mt-sky').setAttribute('aria-pressed', kind === 'sky' ? 'true' : 'false');
+  const aerial = kind === 'aerial';
+  if (aerial && !state.vworldKey) return;
+  setAerial(aerial);
+  if (!aerial) state.map.setMapTypeId(kind === 'sky' ? k.MapTypeId.HYBRID : k.MapTypeId.ROADMAP);
+  for (const [id, on] of [['mt-road', kind === 'road'], ['mt-sky', kind === 'sky'], ['mt-aerial', aerial]]) { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', on ? 'true' : 'false'); }
   try { localStorage.setItem(MAPTYPE_KEY, kind); } catch { /* 저장 불가여도 동작 */ }
 }
 function setupMapType() {
   $('maptype').hidden = false;
   $('mt-road').addEventListener('click', () => setMapType('road'));
   $('mt-sky').addEventListener('click', () => setMapType('sky'));
+  if (state.vworldKey) { $('mt-aerial').hidden = false; $('mt-aerial').addEventListener('click', () => setMapType('aerial')); }
   let k = 'road'; try { k = localStorage.getItem(MAPTYPE_KEY) || 'road'; } catch { /* 무시 */ }
-  if (k === 'sky') setMapType('sky');
+  if (k === 'sky' || (k === 'aerial' && state.vworldKey)) setMapType(k);
 }
 // 처음(새로고침) 지도 시점: 대한민국 전체(제주·울릉도·독도 포함)
 function fitKorea() {
@@ -976,7 +1048,7 @@ function syncMapNotams() {
     const { pts, bad } = readyPoints();
     if (!bad.length && pts.length >= 2) { drawMap(null, null, pts); return; }   // 경로가 있으면 경로와 함께 다시 그림
     clearOverlays(); areaLayer();
-    notamLayer(currentNotams(), null, false);          // 경로가 없을 때는 지도 시점을 바꾸지 않는다(처음에는 대한민국 전체)
+    notamLayer(currentNotams(), null, false); drawAerial(null, []);          // 경로가 없을 때는 지도 시점을 바꾸지 않는다(처음에는 대한민국 전체)
   }, 250);
 }
 
@@ -1004,7 +1076,9 @@ function drawMap(result, data, pts) {
     }
     for (const l of data.lightning.filter(near)) add(new k.CustomOverlay({ position: ll(l), content: '<div class="bolt" title="낙뢰">✕</div>' }));
   }
-  state.map.setBounds(b, 60, 60, 60, 60);
+  if (!AERIAL.on) state.map.setBounds(b, 60, 60, 60, 60);
+  drawAerial(result, pts);
+  if (AERIAL.on && pts.length >= 2) AERIAL.map.fitBounds(pts.map((p) => [p.lat, p.lon]), { padding: [60, 60], maxZoom: 15 });
 }
 
 init().catch((e) => { $('run-msg').textContent = '초기화 실패: ' + e.message; });

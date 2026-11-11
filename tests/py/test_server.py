@@ -157,6 +157,13 @@ class SigwxTmfc(unittest.TestCase):
         self.assertEqual(r['items'], []); self.assertIn('500', r['error'])
 
 
+class VworldCfgTest(unittest.TestCase):
+    def test_client_config_vworld_key(self):
+        from server.web import handle_api
+        def cc(**kw): return json.loads(handle_api('GET', '/api/client-config', {}, b'', client=None, config={}, kakao_js_key='', **kw)[2])
+        self.assertEqual(cc()['vworldKey'], ''); self.assertEqual(cc(vworld_key='K1')['vworldKey'], 'K1')
+
+
 class PersistTest(unittest.TestCase):
     def test_fallback_to_saved_when_fetch_fails(self):
         from server.store import MemoryStore
