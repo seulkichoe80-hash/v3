@@ -149,6 +149,7 @@ function loadKakao(key) {
         state.kakao = k;
         state.map = new k.Map($('map'), { center: new k.LatLng(36.4, 127.8), level: 12 });
         state.map.addControl(new k.ZoomControl(), k.ControlPosition.RIGHT);
+        fitKorea();
         state.geocoder = new k.services.Geocoder();
         state.placeSvc = new k.services.Places();
         setTimeout(syncMapNotams, 0);     // 지도가 준비되면 이미 입력·저장된 NOTAM을 바로 표시
@@ -918,6 +919,12 @@ function drawRouteOnly() {
   if (state.map && !bad.length && pts.length >= 2) drawMap(null, null, pts);
 }
 
+// 처음(새로고침) 지도 시점: 대한민국 전체(제주·울릉도·독도 포함)
+function fitKorea() {
+  const k = state.kakao; if (!k || !state.map) return;
+  const b = new k.LatLngBounds(); b.extend(new k.LatLng(33.0, 124.6)); b.extend(new k.LatLng(38.7, 131.9));
+  state.map.setBounds(b, 10, 10, 10, 10);
+}
 // ---------- 비행금지구역(P-73·P-518 등) 지도 표시(상시) ----------
 function areaLayer() {
   const k = state.kakao; if (!k) return;
@@ -953,9 +960,7 @@ function syncMapNotams() {
     const { pts, bad } = readyPoints();
     if (!bad.length && pts.length >= 2) { drawMap(null, null, pts); return; }   // 경로가 있으면 경로와 함께 다시 그림
     clearOverlays(); areaLayer();
-    const list = currentNotams(), b = new state.kakao.LatLngBounds();
-    notamLayer(list, b, true);
-    if (list.length) state.map.setBounds(b, 80, 80, 80, 80);
+    notamLayer(currentNotams(), null, false);          // 경로가 없을 때는 지도 시점을 바꾸지 않는다(처음에는 대한민국 전체)
   }, 250);
 }
 

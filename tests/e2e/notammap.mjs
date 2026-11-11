@@ -13,6 +13,17 @@ await page.route('**/api/client-config', async (route) => { const r = await rout
 await page.route(/dapi\.kakao\.com\/v2\/maps\/sdk\.js/, (r) => r.fulfill({ contentType: 'text/javascript', body: readFileSync(ROOT + 'tests/e2e/kakao_stub.js', 'utf8') }));
 await page.goto(`http://localhost:${PORT}/`);
 await page.waitForTimeout(800);
+// 저장된 NOTAM이 있는 채로 새로고침해도(경로 없음) 지도는 대한민국 전체 시점이어야 하고 NOTAM 한 곳으로 확대되면 안 된다
+await page.click('#sheet-tab-3'); if (!(await page.isVisible('#notam-1'))) await page.click('#notam-1-sum');
+await page.fill('#notam-1', readFileSync(ROOT + 'tests/fixtures/notam_d2840.txt', 'utf8')); await page.click('#notam-1-save');
+await page.waitForFunction(() => /저장됨/.test(document.querySelector('#notam-1-status').textContent), null, { timeout: 5000 });
+await page.reload(); await page.waitForTimeout(900);
+const sb = await page.evaluate(() => window.__sb || []);
+if (sb.length !== 1) fail('새로고침 직후 지도 시점 설정이 1번이어야 함: ' + sb.length);
+if (!(sb[0].some((p) => p[0] <= 33.1) && sb[0].some((p) => p[0] >= 38.5) && sb[0].some((p) => p[1] >= 131))) fail('처음 시점이 대한민국 전체가 아님: ' + JSON.stringify(sb[0]));
+const circ = await page.evaluate(() => window.__kk.filter((x) => x.name === 'Circle').length);
+if (circ < 1) fail('저장된 NOTAM이 지도에 표시되지 않음');
+await page.click('#sheet-tab-1');
 await page.fill('#pt-from-q', '아주대'); await page.dispatchEvent('#pt-from-q', 'input');
 await page.waitForFunction(() => /아주대학교병원/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 });
 await page.press('#pt-from-q', 'Enter');

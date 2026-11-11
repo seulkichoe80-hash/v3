@@ -10,9 +10,9 @@
               { place_name: '정부대전청사', y: '36.3612', x: '127.3845', road_address_name: '대전 서구 청사로 189', address_name: '' }];
   window.kakao = { maps: {
     load: (cb) => setTimeout(cb, 0), LatLng,
-    Map: function () { this.addControl = noop; this.setBounds = noop; },
+    Map: function () { this.addControl = noop; this.setBounds = (b) => { (window.__sb = window.__sb || []).push(b && b.pts ? b.pts.slice() : []); }; },
     ZoomControl: function () {}, ControlPosition: { RIGHT: 'R' },
-    LatLngBounds: function () { this.extend = noop; },
+    LatLngBounds: function () { this.pts = []; this.extend = (p) => { this.pts.push([p.lat, p.lng]); }; },
     Polyline: Obj, CustomOverlay: Rec('CustomOverlay'), Circle: Rec('Circle'), Polygon: Rec('Polygon'),
     event: { addListener: (t, ev, fn) => { (window.__kl = window.__kl || {})[ev] = fn; } },
     services: { Status,
