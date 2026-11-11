@@ -41,7 +41,7 @@ if (!pre.some((x) => /nt-label/.test(x.html || '') && /D2840\/26/.test(x.html)))
 // 비행금지·제한구역(R-75·P-73·P-518W·P-518·P-518E)도 판단 실행 전에 항상 그려진다
 const polys = await page.evaluate(() => window.__kk.filter((x) => x.name === 'Polygon' && (x.o.strokeColor === '#8e24aa' || x.o.strokeColor === '#e67e00')).length);
 if (polys < 5) fail('비행금지구역 다각형이 그려지지 않음: ' + polys);
-if (!pre.some((x) => /area-label/.test(x.html || '') && /P-518/.test(x.html))) fail('비행금지구역 라벨 없음');
+if (pre.some((x) => /area-label/.test(x.html || ''))) fail('비행금지·제한구역 글자는 지도에 상시 표시하지 않아야 함');
 // ② 판단 실행 전에는 지도 클릭으로 지점이 바뀐다
 const clickMap = (la = 35.1, lo = 129.0) => page.evaluate(([a, b]) => window.__kl.click({ latLng: { getLat: () => a, getLng: () => b } }), [la, lo]);
 const toLoc = () => page.textContent('#pt-to-loc');

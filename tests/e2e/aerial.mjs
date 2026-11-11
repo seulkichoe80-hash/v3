@@ -39,7 +39,8 @@ if (!(x / 2 ** z > 0.8 && x / 2 ** z < 0.9 && y / 2 ** z > 0.3 && y / 2 ** z < 0
 const shapes = await page.locator('#map2 path.leaflet-interactive').count();
 if (shapes < 8) fail('경로·NOTAM·비행금지구역이 그려지지 않음: ' + shapes);
 if (!(await page.textContent('#map2')).includes('D2840/26')) fail('항공사진 위 NOTAM 라벨이 없음');
-if (!/P-518/.test(await page.textContent('#map2'))) fail('항공사진 위 비행금지구역 라벨이 없음');
+if (/P-518|P-73|R-75/.test(await page.textContent('#map2'))) fail('항공사진 위에 비행금지구역 글자를 상시 표시하면 안 됨');
+if ((await page.evaluate(() => document.querySelectorAll('#map2 path.leaflet-interactive').length)) < 8) fail('구역 도형은 그대로 그려져야 함');
 // 지도 클릭으로 지점 지정(잠금이 꺼져 있으면 동작)
 const before = await page.textContent('#pt-to-loc');
 await page.mouse.click(650, 450); await page.waitForTimeout(500);

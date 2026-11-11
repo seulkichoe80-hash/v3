@@ -1016,8 +1016,8 @@ function drawAerial(result, pts) {
   const L = window.L, g = AERIAL.group; g.clearLayers();
   for (const a of AREAS) {
     const col = a.color;
-    L.polygon(a.poly.map((p) => [p.lat, p.lon]), { color: col, weight: 2, dashArray: '6 5', fillColor: col, fillOpacity: 0.12 }).addTo(g);
-    L.tooltip({ permanent: true, direction: 'center', className: 'ar-tip', opacity: 1 }).setContent(`${a.short} ${a.kind === 'P' ? '비행금지' : '비행제한'}`).setLatLng([a.label.lat, a.label.lon]).addTo(g);
+    L.polygon(a.poly.map((p) => [p.lat, p.lon]), { color: col, weight: 2, dashArray: '6 5', fillColor: col, fillOpacity: 0.12 }).addTo(g)
+      .bindTooltip(`${a.short} ${a.kind === 'P' ? '비행금지' : '비행제한'} · ${esc(a.name)}`, { sticky: true, className: 'ar-tip', opacity: 1 });
   }
   const list = result ? result.notams.filter((n) => n.inScope && n.center) : currentNotams();
   list.forEach((n) => {
@@ -1075,10 +1075,13 @@ function fitKorea() {
 function areaLayer() {
   const k = state.kakao; if (!k) return;
   for (const a of AREAS) {
-    add(new k.Polygon({ path: a.poly.map((p) => new k.LatLng(p.lat, p.lon)), strokeWeight: 2, strokeColor: a.color, strokeOpacity: 0.9, strokeStyle: 'shortdash', fillColor: a.color, fillOpacity: 0.10 }));
-    add(new k.CustomOverlay({ position: new k.LatLng(a.label.lat, a.label.lon), yAnchor: 0.5, zIndex: 5, content: `<div class="area-label ${a.kind}" title="${esc(a.name + ' · ' + a.lower + '~' + a.upper + ' · ' + AIRAC_NOTE)}">${esc(a.short)} ${a.kind === 'P' ? '비행금지' : '비행제한'}</div>` }));
+    const pg = add(new k.Polygon({ path: a.poly.map((p) => new k.LatLng(p.lat, p.lon)), strokeWeight: 2, strokeColor: a.color, strokeOpacity: 0.9, strokeStyle: 'shortdash', fillColor: a.color, fillOpacity: 0.10 }));
+    // 지도에는 글자를 상시 표시하지 않고, 마우스를 올리면(또는 눌러 보면) 구역 이름을 잠시 보여 준다
+    const tip = (e) => { hideAreaTip(); state.areaTip = new k.CustomOverlay({ position: e.latLng, yAnchor: 1.4, zIndex: 25, content: `<div class="area-label ${a.kind}" title="${esc(AIRAC_NOTE)}">${esc(a.short)} ${a.kind === 'P' ? '비행금지' : '비행제한'} · ${esc(a.name)}</div>` }); state.areaTip.setMap(state.map); };
+    k.event.addListener(pg, 'mouseover', tip); k.event.addListener(pg, 'mouseout', hideAreaTip);
   }
 }
+function hideAreaTip() { if (state.areaTip) { state.areaTip.setMap(null); state.areaTip = null; } }
 // ---------- NOTAM 지도 표시(상시): 붙여넣은 D 시리즈 NOTAM을 판단 실행 전에도 빨간 원·좌표·반경으로 그림 ----------
 // 유효시간(KST): 시작 ~ 종료(PERM·추정(EST) 표시)
 function notamPeriod(n) {
