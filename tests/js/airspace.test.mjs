@@ -39,3 +39,13 @@ test('근접: P73에서 3NM 이내는 근접 경고, 그 밖은 없음', () => {
   const far = airspaceRows(AREAS, [P('a', 37.5358, 127.2), P('b', 37.5358, 127.3)]);
   assert.ok(!far.some((r) => /P-73/.test(r.item) && r.grade === 'YELLOW'));
 });
+
+test('R-75: 좌표 15점, 서울 도심은 안·수원/인천은 밖, 비행제한(승인·통보) 안내', () => {
+  const r = byId('R75'); assert.equal(r.poly.length, 15); assert.equal(r.kind, 'R');
+  assert.ok(Math.abs(r.poly[0].lat - (37 + 39 / 60 + 49 / 3600)) < 1e-9 && Math.abs(r.poly[0].lon - (126 + 48 / 60 + 24 / 3600)) < 1e-9);
+  for (const [n, la, lo] of [['서울시청', 37.5665, 126.978], ['강남', 37.4979, 127.0276], ['여의도', 37.5219, 126.9245]]) assert.ok(pointInPolygon(P(n, la, lo), r.poly), n + ' 안');
+  for (const [n, la, lo] of [['수원', 37.28, 127.04], ['인천', 37.456, 126.705], ['의정부', 37.738, 127.047], ['김포공항', 37.5583, 126.7906]]) assert.ok(!pointInPolygon(P(n, la, lo), r.poly), n + ' 밖');
+  const rows = airspaceRows(AREAS, [P('수원', 37.28, 127.04), P('서울역', 37.5547, 126.9707)]);
+  const row = rows.find((x) => /R-75/.test(x.item));
+  assert.ok(row && /비행제한구역/.test(row.item) && row.grade === 'YELLOW' && /승인/.test(row.limit + row.note) && /수도방위사령부/.test(row.note), JSON.stringify(rows));
+});

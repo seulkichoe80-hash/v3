@@ -27,9 +27,9 @@ await page.waitForTimeout(600);
 let pre = await page.evaluate(() => window.__kk.map((x) => ({ name: x.name, c: x.o.strokeColor, html: x.o.content })));
 if (!pre.some((x) => x.name === 'Circle' && x.c === '#d6201a')) fail('판단 실행 전에 NOTAM 원이 안 그려짐');
 if (!pre.some((x) => /nt-label/.test(x.html || '') && /D2840\/26/.test(x.html))) fail('판단 실행 전 NOTAM 라벨 없음');
-// 비행금지구역(P-73·P-518W·P-518·P-518E)도 판단 실행 전에 항상 그려진다
-const polys = await page.evaluate(() => window.__kk.filter((x) => x.name === 'Polygon' && x.o.strokeColor === '#8e24aa').length);
-if (polys < 4) fail('비행금지구역 다각형이 그려지지 않음: ' + polys);
+// 비행금지·제한구역(R-75·P-73·P-518W·P-518·P-518E)도 판단 실행 전에 항상 그려진다
+const polys = await page.evaluate(() => window.__kk.filter((x) => x.name === 'Polygon' && (x.o.strokeColor === '#8e24aa' || x.o.strokeColor === '#e67e00')).length);
+if (polys < 5) fail('비행금지구역 다각형이 그려지지 않음: ' + polys);
 if (!pre.some((x) => /area-label/.test(x.html || '') && /P-518/.test(x.html))) fail('비행금지구역 라벨 없음');
 // ② 판단 실행 전에는 지도 클릭으로 지점이 바뀐다
 const clickMap = (la = 35.1, lo = 129.0) => page.evaluate(([a, b]) => window.__kl.click({ latLng: { getLat: () => a, getLng: () => b } }), [la, lo]);

@@ -351,3 +351,4 @@ details.faroff .n { opacity: .75; }
 
 .area-label { background: rgba(255,255,255,.88); border: 1.5px dashed #8e24aa; color: #6a1b7e; border-radius: 4px; padding: 1px 5px; font: 700 11px/1.3 var(--mono, monospace); white-space: nowrap; }
 .legend .pa { color: #8e24aa; font-weight: 700; }
+.area-label.R { border-color: #e67e00; color: #9a5300; }

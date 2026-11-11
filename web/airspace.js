@@ -1,5 +1,5 @@
 // 비행금지·제한구역(AIP Korea ENR 5.1). 좌표는 담당자가 제공한 ENR 5.1 발췌문의 값을 그대로 옮겼다(DDMMSSN DDDMMSSE).
-// 개정(AIRAC)이 바뀌면 이 파일의 좌표와 AIRAC_NOTE만 교체한다. R-75는 원문을 받는 대로 추가한다.
+// 개정(AIRAC)이 바뀌면 이 파일의 좌표와 AIRAC_NOTE만 교체한다.
 export const AIRAC_NOTE = 'AIP ENR 5.1 발췌(담당자 제공) — 현행 개정 여부 확인 필요';
 
 function dms(s) {   // '373900N 1261000E' → {lat, lon}
@@ -23,6 +23,13 @@ function capsule(c1, c2, rNm, n = 24) {
 }
 
 export const AREAS = [
+  {
+    id: 'R75', short: 'R-75', name: '수도권 비행제한구역', kind: 'R', upper: '10,000ft AMSL(원문 확인 필요)', lower: 'SFC', authority: '수도방위사령부',
+    remark: '수도권(서울) 비행제한구역. 진입 전 비행계획 통보·승인 여부를 AIP ENR 5.1 비고와 관할기관에서 확인', label: { lat: 37.5, lon: 127.06 }, color: '#e67e00',
+    // RK R75 CAPITAL: 표의 점 순서대로 이어 마지막 점에서 처음 점으로 닫음
+    poly: ring(['373949N 1264824E', '373752N 1264813E', '373701N 1264754E', '373530N 1264817E', '373409N 1264824E', '372653N 1265722E', '372653N 1270338E', '373233N 1270647E', '373447N 1270930E', '373656N 1270830E', '373827N 1270800E', '374033N 1270513E', '374136N 1270317E', '374200N 1270140E', '373758N 1265259E']),
+    approx: '',
+  },
   {
     id: 'P73', short: 'P-73', name: '서울 비행금지구역', kind: 'P', upper: 'UNL', lower: 'GND', authority: '수도방위사령부',
     remark: 'ENR 1.2 (RK P73 부근 비행절차) 참조', label: { lat: 37.5358, lon: 126.9772 }, color: '#8e24aa',

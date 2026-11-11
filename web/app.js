@@ -923,7 +923,7 @@ function areaLayer() {
   const k = state.kakao; if (!k) return;
   for (const a of AREAS) {
     add(new k.Polygon({ path: a.poly.map((p) => new k.LatLng(p.lat, p.lon)), strokeWeight: 2, strokeColor: a.color, strokeOpacity: 0.9, strokeStyle: 'shortdash', fillColor: a.color, fillOpacity: 0.10 }));
-    add(new k.CustomOverlay({ position: new k.LatLng(a.label.lat, a.label.lon), yAnchor: 0.5, zIndex: 5, content: `<div class="area-label" title="${esc(a.name + ' · ' + a.lower + '~' + a.upper + ' · ' + AIRAC_NOTE)}">${esc(a.short)} ${a.kind === 'P' ? '비행금지' : '비행제한'}</div>` }));
+    add(new k.CustomOverlay({ position: new k.LatLng(a.label.lat, a.label.lon), yAnchor: 0.5, zIndex: 5, content: `<div class="area-label ${a.kind}" title="${esc(a.name + ' · ' + a.lower + '~' + a.upper + ' · ' + AIRAC_NOTE)}">${esc(a.short)} ${a.kind === 'P' ? '비행금지' : '비행제한'}</div>` }));
   }
 }
 // ---------- NOTAM 지도 표시(상시): 붙여넣은 D 시리즈 NOTAM을 판단 실행 전에도 빨간 원·좌표·반경으로 그림 ----------
