@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { AREAS } from '../../web/airspace.js';
+import { pointInPolygon, routeDistanceToPolygonKm } from '../../web/geo.js';
+import { airspaceRows } from '../../web/judge.js';
+const P = (name, lat, lon) => ({ name, lat, lon });
+const byId = (id) => AREAS.find((a) => a.id === id);
+test('좌표 변환: P518 첫 점 37°39′N 126°10′E', () => {
+  const p = byId('P518').poly[0]; assert.ok(Math.abs(p.lat - 37.65) < 1e-9 && Math.abs(p.lon - (126 + 10 / 60)) < 1e-9);
+  assert.equal(byId('P518W').poly.length, 7); assert.equal(byId('P518E').poly.length, 4);
+});
+test('P73 캡슐: 두 중심과 그 사이는 안, 먼 곳은 밖, 반경 약 2NM', () => {
+  const poly = byId('P73').poly, c1 = P('c1', 37 + 32 / 60 + 9 / 3600, 126 + 58 / 60 + 38 / 3600), c2 = P('c2', 37 + 32 / 60 + 32 / 3600, 126 + 59 / 60 + 43 / 3600);
+  assert.ok(pointInPolygon(c1, poly) && pointInPolygon(c2, poly));
+  assert.ok(pointInPolygon(P('중간', (c1.lat + c2.lat) / 2, (c1.lon + c2.lon) / 2), poly));
+  assert.ok(pointInPolygon(P('서울역', 37.5547, 126.9707), poly), '서울역은 P73 안');
+  assert.ok(!pointInPolygon(P('김포', 37.5583, 126.7906), poly));
+  const d = routeDistanceToPolygonKm([P('a', 37.5358, 127.1), P('b', 37.5358, 127.2)], poly);   // 중심에서 동쪽 약 11km
+  assert.ok(d > 3 && d < 12, String(d));
+});
+test('P518: 남쪽 경계선 위·아래', () => {
+  const poly = byId('P518').poly;
+  assert.ok(pointInPolygon(P('철원', 38.15, 127.3), poly)); assert.ok(pointInPolygon(P('파주 북부', 37.95, 126.85), poly));
+  assert.ok(!pointInPolygon(P('서울', 37.5665, 126.978), poly)); assert.ok(!pointInPolygon(P('수원', 37.28, 127.04), poly));
+});
+test('airspaceRows: 통과·근접·해당없음·미지정', () => {
+  const thru = airspaceRows(AREAS, [P('김포', 37.5583, 126.7906), P('서울역', 37.5547, 126.9707)]);
+  assert.ok(thru.some((r) => /P-73/.test(r.item) && r.grade === 'YELLOW' && /경로 통과/.test(r.value)));
+  assert.match(thru.find((r) => /P-73/.test(r.item)).note, /수도방위사령부/);
+  const north = airspaceRows(AREAS, [P('수원', 37.28, 127.04), P('연천', 38.1, 127.1)]);
+  assert.ok(north.some((r) => /P-518/.test(r.item) && /통과/.test(r.value)));
+  const none = airspaceRows(AREAS, [P('대전', 36.35, 127.38), P('대구', 35.87, 128.6)]);
+  assert.equal(none.length, 1); assert.equal(none[0].grade, 'GREEN'); assert.match(none[0].value, /해당 없음/);
+  assert.deepEqual(airspaceRows(undefined, [P('a', 37, 127), P('b', 37.1, 127)]), []);
+});
+test('근접: P73에서 3NM 이내는 근접 경고, 그 밖은 없음', () => {
+  const near = airspaceRows(AREAS, [P('a', 37.5358, 127.04), P('b', 37.5358, 127.1)]);   // 경계에서 동쪽 약 1km
+  assert.ok(near.some((r) => /P-73/.test(r.item) && /근접/.test(r.value)), JSON.stringify(near));
+  const far = airspaceRows(AREAS, [P('a', 37.5358, 127.2), P('b', 37.5358, 127.3)]);
+  assert.ok(!far.some((r) => /P-73/.test(r.item) && r.grade === 'YELLOW'));
+});

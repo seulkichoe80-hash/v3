@@ -106,3 +106,14 @@ export function routeIntersectsPolygon(route, poly) {
   if (!poly || poly.length < 3) return false;
   return sampleRouteMulti(route, 1).some((p) => pointInPolygon(p, poly));
 }
+
+// 경로가 다각형 안을 지나면 0, 아니면 경로 점들에서 다각형 변까지의 최단거리(km). 경로를 1km 간격으로 훑는다.
+export function routeDistanceToPolygonKm(route, poly) {
+  if (!poly || poly.length < 3) return Infinity;
+  let best = Infinity;
+  for (const p of sampleRouteMulti(route, 1)) {
+    if (pointInPolygon(p, poly)) return 0;
+    for (let i = 0; i < poly.length; i++) best = Math.min(best, pointToSegmentKm(p, poly[i], poly[(i + 1) % poly.length]));
+  }
+  return best;
+}

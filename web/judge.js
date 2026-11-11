@@ -1,5 +1,5 @@
 // 119항공대 운영 규정 제21조 기준 판정 엔진 (순수 함수). 시스템은 조언만 하며 최종 판단은 통제관·기장.
-import { distanceKm, pointToRouteKm, sunTimesLocal, routeIntersectsPolygon, KM_PER_NM } from './geo.js';
+import { distanceKm, pointToRouteKm, sunTimesLocal, routeIntersectsPolygon, routeDistanceToPolygonKm, KM_PER_NM } from './geo.js';
 import { assessNotamRoute } from './notam.js';
 import { msToKt } from './rules.js';
 
@@ -137,6 +137,23 @@ function warnRows(warns, regions, status, regionsAvailable, seaRoute) {
   return rows;
 }
 
+// 비행금지·제한구역(AIP): 경로가 구역을 지나거나 가까우면 "주의 + 허가 필요" 안내. areas가 없으면 판정하지 않는다.
+export function airspaceRows(areas, route, nearNm = 3) {
+  if (!areas || !areas.length) return [];
+  const hits = [];
+  for (const a of areas) {
+    const d = routeDistanceToPolygonKm(route, a.poly);
+    if (d === 0) hits.push({ a, rel: 'CROSS', d });
+    else if (d / KM_PER_NM <= nearNm) hits.push({ a, rel: 'NEAR', d });
+  }
+  if (!hits.length) return [{ segment: '경로', item: '비행금지·제한구역', value: `해당 없음 (${areas.map((a) => a.short).join('·')})`, limit: '진입 불가·허가 필요', grade: 'GREEN', source: 'AIP ENR 5.1', obsTime: null, note: '' }];
+  return hits.map(({ a, rel, d }) => ({
+    segment: '경로', item: `${a.kind === 'P' ? '비행금지구역' : '비행제한구역'} ${a.short}`,
+    value: `${a.name} ${rel === 'CROSS' ? '경로 통과' : `경로 ${(d / KM_PER_NM).toFixed(1)}NM 근접`}`, limit: a.kind === 'P' ? '허가 없이 진입 불가' : '비행계획 통보·승인 필요', grade: 'YELLOW', source: 'AIP ENR 5.1', obsTime: null,
+    note: `${a.kind === 'P' ? '허가 없이 진입할 수 없으니 우회하거나' : '관할기관 승인을 확인하고'} ${a.authority}에 협조 필요(${a.lower}~${a.upper})${a.approx ? ' · ' + a.approx : ''}`,
+  }));
+}
+
 function lightningRow(items, route, input) {
   const { config, now, dataStatus = {} } = input;
   const base = { segment: '경로', item: '낙뢰', limit: `${config.radius.lightningKm}km 이내 없음`, source: '기상청 낙뢰', obsTime: null };
@@ -229,6 +246,7 @@ export function evaluate(input) {
     ...warnRows(data.warn || [], routeRegions, dataStatus.warn, regionsAvailable, seaRoute),
     lightningRow(data.lightning || [], pts, input),
     sigwxRow(data.sigwx, pts, input),
+    ...airspaceRows(input.airspaceAreas, pts, (config.radius || {}).airspaceNearNm ?? 3),
   ];
 
   const assessed = notams.map((n) => assessNotamRoute(n, pts, departUtc, arriveUtc, config.radius.notamNearNm));

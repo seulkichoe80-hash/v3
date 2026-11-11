@@ -13,7 +13,7 @@
     Map: function () { this.addControl = noop; this.setBounds = noop; },
     ZoomControl: function () {}, ControlPosition: { RIGHT: 'R' },
     LatLngBounds: function () { this.extend = noop; },
-    Polyline: Obj, CustomOverlay: Rec('CustomOverlay'), Circle: Rec('Circle'), Polygon: Obj,
+    Polyline: Obj, CustomOverlay: Rec('CustomOverlay'), Circle: Rec('Circle'), Polygon: Rec('Polygon'),
     event: { addListener: (t, ev, fn) => { (window.__kl = window.__kl || {})[ev] = fn; } },
     services: { Status,
       Places: function () { this.keywordSearch = (q, cb) => { const r = DB.filter((d) => d.place_name.includes(q.replace(/\s/g, '').slice(0, 2))); setTimeout(() => cb(r, r.length ? Status.OK : Status.ZERO_RESULT), 10); }; },

@@ -73,6 +73,7 @@ if ((await page.locator('#notam-list > .n').count()) !== 0) fail('경로와 먼 
 if (!/경로상에 해당하는 NOTAM이 없습니다/.test(await page.textContent('#notam-list')) || (await page.locator('#notam-list details.faroff').count()) !== 1) fail('경로 무관 NOTAM 안내가 이상함: ' + await page.textContent('#notam-list'));
 await set('#pt-from-name', '김포'); await set('#pt-from-coord', '37.5583, 126.7906'); await set('#pt-to-name', '서울역'); await set('#pt-to-coord', '37.5547, 126.9707');
 await page.click('#run'); await ran();
+if (!/비행금지구역 P-73/.test(await page.textContent('#rows')) || !/수도방위사령부/.test(await page.textContent('#rows'))) fail('서울역 도착 경로에 P-73 안내가 없음');
 if ((await page.locator('#notam-list > .n').count()) !== 1 || !/D2840\/26/.test(await page.textContent('#notam-list > .n'))) fail('경로에 걸리는 NOTAM이 본 목록에 없음');
 // 주요지점 CSV: 불러오기(잘못된 줄 건너뜀, 같은 이름 갱신) → 내려받기
 await page.click('#places-sum');

@@ -2,6 +2,7 @@
 import { distanceKm, sampleRouteMulti, isNightDuringRoute, routeLengthKm, KM_PER_NM } from './geo.js';
 import { compareTransport } from './transport.js';
 import { routeOverSea } from './landmask.js';
+import { AREAS, AIRAC_NOTE } from './airspace.js';
 import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
 import { evaluate, GRADE_TEXT, dirText, SIGWX_TEXT } from './judge.js';
@@ -716,7 +717,7 @@ async function run() {
       points: pts, departUtc: dep, cruiseKt: cruiseKt(), isNight, isSea, data, dataStatus,
       regionsAvailable: rr.available, seaRoute: seaSuggest,
       notams: splitNotams(text).map(parseNotam), notamsProvided: text.trim().length > 0,
-      routeRegions: rr.regions, now: new Date(), config: state.config,
+      routeRegions: rr.regions, now: new Date(), config: state.config, airspaceAreas: AREAS,
     });
     const dsp = state.config.dispatch || {};
     const prep = Number.isFinite(+$('prep').value) && $('prep').value !== '' && +$('prep').value >= 0 ? Math.round(+$('prep').value) : (dsp.heliPrepMin ?? 15);
@@ -917,6 +918,14 @@ function drawRouteOnly() {
   if (state.map && !bad.length && pts.length >= 2) drawMap(null, null, pts);
 }
 
+// ---------- 비행금지구역(P-73·P-518 등) 지도 표시(상시) ----------
+function areaLayer() {
+  const k = state.kakao; if (!k) return;
+  for (const a of AREAS) {
+    add(new k.Polygon({ path: a.poly.map((p) => new k.LatLng(p.lat, p.lon)), strokeWeight: 2, strokeColor: a.color, strokeOpacity: 0.9, strokeStyle: 'shortdash', fillColor: a.color, fillOpacity: 0.10 }));
+    add(new k.CustomOverlay({ position: new k.LatLng(a.label.lat, a.label.lon), yAnchor: 0.5, zIndex: 5, content: `<div class="area-label" title="${esc(a.name + ' · ' + a.lower + '~' + a.upper + ' · ' + AIRAC_NOTE)}">${esc(a.short)} ${a.kind === 'P' ? '비행금지' : '비행제한'}</div>` }));
+  }
+}
 // ---------- NOTAM 지도 표시(상시): 붙여넣은 D 시리즈 NOTAM을 판단 실행 전에도 빨간 원·좌표·반경으로 그림 ----------
 // 유효시간(KST): 시작 ~ 종료(PERM·추정(EST) 표시)
 function notamPeriod(n) {
@@ -943,7 +952,7 @@ function syncMapNotams() {
     if (!state.kakao || !state.map) return;
     const { pts, bad } = readyPoints();
     if (!bad.length && pts.length >= 2) { drawMap(null, null, pts); return; }   // 경로가 있으면 경로와 함께 다시 그림
-    clearOverlays();
+    clearOverlays(); areaLayer();
     const list = currentNotams(), b = new state.kakao.LatLngBounds();
     notamLayer(list, b, true);
     if (list.length) state.map.setBounds(b, 80, 80, 80, 80);
@@ -958,6 +967,7 @@ function drawMap(result, data, pts) {
   pts.forEach((p, i) => add(new k.CustomOverlay({ position: ll(p), yAnchor: 1,
     content: `<div class="pin">${esc((i === 0 ? '출발 ' : i === pts.length - 1 ? '목적 ' : `경유${i} `) + p.name)}</div>` })));
   const b = new k.LatLngBounds(); pts.forEach((p) => b.extend(ll(p)));
+  areaLayer();
   notamLayer(result ? result.notams.filter((n) => n.inScope && n.center) : currentNotams(), b, !!result);   // NOTAM은 판단 실행 전에도 항상 표시
   if (result && data) {
     const lim = result.limits, f = state.config.limits.cautionFactor;
