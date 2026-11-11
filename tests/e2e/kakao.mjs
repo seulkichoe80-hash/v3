@@ -63,7 +63,8 @@ await page.fill('#ms-q', '정부대전'); await page.dispatchEvent('#ms-q', 'inp
 await page.waitForFunction(() => /정부대전청사/.test(document.querySelector('#ms-results').textContent), null, { timeout: 5000 }).catch(() => fail('지도 위 검색 결과가 안 나옴'));
 await page.click('#ms-results li:has-text("정부대전청사")');
 if (!(await page.isVisible('#ms-card')) || !/정부대전청사/.test(await page.textContent('#ms-name'))) fail('위치 카드가 안 뜸');
-if (!/36\.361200, 127\.384500/.test(await page.textContent('#ms-dec')) || !/36/.test(await page.textContent('#ms-coord'))) fail('좌표 표시 이상: ' + await page.textContent('#ms-dec'));
+if (!/36\.361200, 127\.384500/.test(await page.textContent('#ms-dec')) || !/^36°21\.672'N 127°23\.070'E$/.test(await page.textContent('#ms-ddm')) || !/^36°21'40\.3"N 127°23'04\.2"E$/.test(await page.textContent('#ms-dms'))) fail('좌표 3가지 표시 이상: ' + await page.textContent('#ms-dec') + ' | ' + await page.textContent('#ms-ddm') + ' | ' + await page.textContent('#ms-dms'));
+await page.click('#ms-card .cp[data-cp="ms-ddm"]'); await page.waitForFunction(() => /복사됨/.test(document.querySelector('#ms-card .cp[data-cp="ms-ddm"]').textContent), null, { timeout: 3000 }).catch(() => fail('도·분 복사 표시가 안 바뀜'));
 if (!(await page.evaluate(() => (window.__sc || []).some((c) => Math.abs(c[0] - 36.3612) < 1e-6) && window.__sl === 3))) fail('검색한 곳으로 지도가 이동하지 않음');
 await page.click('#ms-via'); if (!/정부대전청사/.test(await page.inputValue('#pt-via1-name'))) fail('[경유지로]가 반영되지 않음');
 await page.click('#ms-to'); if (!/정부대전청사 \(36\.36/.test(await page.textContent('#pt-to-loc'))) fail('[목적지로]가 반영되지 않음');

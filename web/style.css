@@ -383,3 +383,8 @@ details.faroff .n { opacity: .75; }
 .found-pin { background: #ff9800; color: #fff; font-weight: 800; font-size: 12px; border-radius: 12px; padding: 3px 9px; box-shadow: 0 1px 5px rgba(0,0,0,.5); white-space: nowrap; }
 @media (max-width: 760px) { .mapsearch { left: 10px; right: 64px; top: 52px; } }
 .mapsearch[hidden] { display: none; }
+
+.ms-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.ms-lab { flex: 0 0 52px; color: #556; font-size: 12px; }
+.ms-row code { flex: 1; min-width: 0; font: 700 12.5px var(--mono, monospace); background: #eef3f8; padding: 2px 5px; border-radius: 4px; white-space: nowrap; overflow-x: auto; }
+.ms-row .cp { flex: 0 0 auto; padding: 2px 8px; }

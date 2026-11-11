@@ -918,7 +918,7 @@ function showFound(f, move = true) {
   state.found = f;
   const c = $('ms-card'); c.hidden = false;
   $('ms-name').textContent = f.name; $('ms-addr').textContent = f.addr || '';
-  $('ms-coord').textContent = `${formatCoord(f, fmtNow())}`; $('ms-dec').textContent = foundText(f);
+  $('ms-dec').textContent = foundText(f); $('ms-ddm').textContent = formatCoord(f, 'ddm'); $('ms-dms').textContent = formatCoord(f, 'dms');
   if (move) moveMapTo(f);
   redrawFound();
 }
@@ -935,7 +935,7 @@ async function copyText(t) { try { await navigator.clipboard.writeText(t); } cat
 function setupFinder() {
   searchBox($('ms-q'), $('ms-results'), (pl) => { $('ms-q').value = ''; showFound(pl, true); });
   $('ms-close').addEventListener('click', clearFound);
-  $('ms-copy').addEventListener('click', async () => { await copyText(foundText(state.found)); $('ms-copy').textContent = '복사됨'; setTimeout(() => { $('ms-copy').textContent = '좌표 복사'; }, 1400); });
+  document.querySelectorAll('#ms-card .cp').forEach((b) => b.addEventListener('click', async () => { await copyText($(b.dataset.cp).textContent); b.textContent = '복사됨'; setTimeout(() => { b.textContent = '복사'; }, 1400); }));
   const asPoint = (key) => () => { const f = state.found; if (!f) return; setPointByKey(key, { name: f.name, lat: f.lat, lon: f.lon }); showSheet(1); };
   $('ms-from').addEventListener('click', asPoint('from')); $('ms-to').addEventListener('click', asPoint('to'));
   $('ms-via').addEventListener('click', () => {
