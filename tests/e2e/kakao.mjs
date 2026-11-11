@@ -57,15 +57,9 @@ await page.click('#amb-from-results li:has-text("평남로")');
 if (!/평남로 616/.test(await page.textContent('#amb-loc'))) fail('주소로 고른 현장이 반영되지 않음');
 await page.fill('#amb-to-q', '존재하지않는곳xyz'); await page.dispatchEvent('#amb-to-q', 'input');
 await page.waitForFunction(() => /검색 결과 없음/.test(document.querySelector('#amb-to-results').textContent), null, { timeout: 5000 }).catch(() => fail('결과 없음 안내가 안 나옴'));
-// 브이월드 키가 없으면 [항공사진] 버튼은 숨김
-if (await page.isVisible('#mt-aerial')) fail('키가 없는데 [항공사진] 버튼이 보임');
-// 지도 종류 전환(일반 ↔ 위성) + 새로고침 후 유지
-if (!(await page.isVisible('#maptype'))) fail('지도 종류 버튼이 안 보임');
-await page.click('#mt-sky'); if (!(await page.evaluate(() => (window.__mt || []).slice(-1)[0] === 'HYBRID'))) fail('위성 전환이 지도에 반영되지 않음');
-if (!(await page.evaluate(() => document.querySelector('#mt-sky').classList.contains('on')))) fail('위성 버튼 표시가 켜지지 않음');
-await page.reload(); await page.waitForTimeout(800);
-if (!(await page.evaluate(() => (window.__mt || []).slice(-1)[0] === 'HYBRID'))) fail('위성 선택이 새로고침 후 유지되지 않음');
-await page.click('#mt-road'); if (!(await page.evaluate(() => (window.__mt || []).slice(-1)[0] === 'ROADMAP'))) fail('일반 지도로 되돌아가지 않음');
+// 브이월드 키가 없으면 지도 종류 버튼 전체를 숨기고(일반 지도만), 위성(스카이뷰) 버튼은 없다
+if (await page.isVisible('#maptype')) fail('키가 없는데 지도 종류 버튼이 보임');
+if (await page.locator('#mt-sky').count()) fail('위성 버튼은 삭제되어야 함');
 if (errors.length) fail('페이지 오류: ' + errors.join(' / '));
 console.log('PASS kakao');
 await browser.close(); srv.kill();

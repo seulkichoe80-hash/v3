@@ -17,7 +17,9 @@ await page.route(/api\.vworld\.kr/, (r) => { tiles.push(r.request().url()); r.fu
 await page.route('**/api/client-config', async (route) => { const r = await route.fetch(); const j = await r.json(); j.kakaoJsKey = 'TESTKEY'; route.fulfill({ json: j }); });
 await page.route(/dapi\.kakao\.com\/v2\/maps\/sdk\.js/, (r) => r.fulfill({ contentType: 'text/javascript', body: readFileSync(ROOT + 'tests/e2e/kakao_stub.js', 'utf8') }));
 await page.goto(`http://localhost:${PORT}/`); await page.waitForTimeout(800);
-if (!(await page.isVisible('#mt-aerial'))) fail('키가 있는데 [항공사진] 버튼이 안 보임');
+if (!(await page.isVisible('#mt-aerial')) || !(await page.isVisible('#mt-road'))) fail('키가 있는데 [일반]/[항공사진] 버튼이 안 보임');
+if (await page.locator('#mt-sky').count()) fail('위성 버튼은 삭제되어야 함');
+if (await page.isVisible('#mt-labels')) fail('지명 버튼은 항공사진을 켠 뒤에만 보임');
 // 경로·NOTAM 준비
 await page.fill('#pt-from-q', '아주대'); await page.dispatchEvent('#pt-from-q', 'input');
 await page.waitForFunction(() => /아주대학교병원/.test(document.querySelector('#pt-from-results').textContent), null, { timeout: 5000 }); await page.press('#pt-from-q', 'Enter');
@@ -42,9 +44,17 @@ if (!/P-518/.test(await page.textContent('#map2'))) fail('항공사진 위 비�
 const before = await page.textContent('#pt-to-loc');
 await page.mouse.click(650, 450); await page.waitForTimeout(500);
 if ((await page.textContent('#pt-to-loc')) === before) fail('항공사진 지도 클릭으로 목적지가 지정되지 않음');
+// 확대 한계 21, 아래층(낮은 단계 사진)+위층(19단계)+지명층, 지명 끄기·켜기와 기억
+const info = await page.evaluate(() => { const A = window.__heliAerial; let sat = 0; A.map.eachLayer((l) => { if (l._url && /Satellite/.test(l._url)) sat++; }); return { max: A.map.getMaxZoom(), sat, labels: A.map.hasLayer(A.labels) }; });
+if (info.max !== 21 || info.sat !== 2 || !info.labels) fail('항공사진 지도 설정 이상: ' + JSON.stringify(info));
+if (!(await page.isVisible('#mt-labels'))) fail('항공사진에서 지명 버튼이 보여야 함');
+await page.click('#mt-labels'); if (await page.evaluate(() => window.__heliAerial.map.hasLayer(window.__heliAerial.labels))) fail('지명 끄기가 안 됨');
+await page.click('#mt-labels'); if (!(await page.evaluate(() => window.__heliAerial.map.hasLayer(window.__heliAerial.labels)))) fail('지명 켜기가 안 됨');
+await page.click('#mt-labels');   // 끈 상태로 새로고침해도 유지되는지 아래에서 확인
 // 일반 지도로 복귀
 await page.click('#mt-road'); if (!(await page.isHidden('#map2')) || (await page.evaluate(() => getComputedStyle(document.querySelector('#map')).visibility)) === 'hidden') fail('일반 지도로 돌아오지 않음');
 // 선택이 새로고침 후 유지
 await page.click('#mt-aerial'); await page.waitForSelector('#map2:not([hidden])'); await page.reload(); await page.waitForTimeout(1500);
 if (await page.isHidden('#map2')) fail('항공사진 선택이 새로고침 후 유지되지 않음');
+if (await page.evaluate(() => window.__heliAerial.map.hasLayer(window.__heliAerial.labels))) fail('지명 끄기 선택이 새로고침 후 유지되지 않음');
 console.log('PASS aerial'); await browser.close(); srv.kill();

@@ -923,7 +923,8 @@ function mapClickAt(lat, lon) {
 }
 
 // ---------- 항공사진(국토교통부 브이월드) 보기: 고해상도 항공사진 위에 경로·NOTAM·비행금지구역을 같은 좌표로 그림 ----------
-const AERIAL = { map: null, group: null, on: false, errs: 0 };
+const AERIAL = { map: null, group: null, labels: null, labelsOn: true, on: false, errs: 0 };
+window.__heliAerial = AERIAL;
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
   return new Promise((res, rej) => {
@@ -941,11 +942,15 @@ async function setAerial(on) {
     $('map').style.visibility = 'hidden'; $('map2').hidden = false;
     if (!AERIAL.map) {
       const key = encodeURIComponent(state.vworldKey), L = window.L;
-      AERIAL.map = L.map('map2', { zoomControl: true, attributionControl: true, maxZoom: 19, minZoom: 5 });
-      const tile = (layer, ext, extra = {}) => L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${key}/${layer}/{z}/{y}/{x}.${ext}`, { maxZoom: 19, maxNativeZoom: 19, attribution: '© 국토교통부 브이월드', ...extra });
-      const sat = tile('Satellite', 'jpeg'); sat.on('tileerror', () => { AERIAL.errs++; if (AERIAL.errs === 3) noteMap('항공사진을 불러오지 못하고 있습니다(인증키·사용 도메인 확인 또는 일시 장애)'); });
+      AERIAL.map = L.map('map2', { zoomControl: true, attributionControl: true, maxZoom: 21, minZoom: 5 });
+      const tile = (layer, ext, extra = {}) => L.tileLayer(`https://api.vworld.kr/req/wmts/1.0.0/${key}/${layer}/{z}/{y}/{x}.${ext}`, { maxZoom: 21, attribution: '© 국토교통부 브이월드', ...extra });
+      // 아래층: 어디서나 있는 낮은 단계 사진을 키워서 깔아 둠(위층 타일이 비어도 빈칸이 안 생김). 위층: 가능한 가장 선명한 단계(19)
+      tile('Satellite', 'jpeg', { maxNativeZoom: 17, attribution: '' }).addTo(AERIAL.map);
+      const sat = tile('Satellite', 'jpeg', { maxNativeZoom: 19, errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' });
+      sat.on('tileerror', () => { AERIAL.errs++; if (AERIAL.errs === 6) noteMap('항공사진을 불러오지 못하고 있습니다(인증키·사용 도메인 확인 또는 일시 장애)'); });
       sat.on('tileload', () => { if (AERIAL.errs) { AERIAL.errs = 0; noteMap(''); } });
-      sat.addTo(AERIAL.map); tile('Hybrid', 'png', { pane: 'overlayPane' }).addTo(AERIAL.map);
+      sat.addTo(AERIAL.map);
+      AERIAL.labels = tile('Hybrid', 'png', { maxNativeZoom: 19, attribution: '' }); if (AERIAL.labelsOn !== false) AERIAL.labels.addTo(AERIAL.map);
       AERIAL.group = L.layerGroup().addTo(AERIAL.map);
       AERIAL.map.on('click', (e) => mapClickAt(e.latlng.lat, e.latlng.lng));
     }
@@ -995,17 +1000,28 @@ function setMapType(kind) {
   const aerial = kind === 'aerial';
   if (aerial && !state.vworldKey) return;
   setAerial(aerial);
-  if (!aerial) state.map.setMapTypeId(kind === 'sky' ? k.MapTypeId.HYBRID : k.MapTypeId.ROADMAP);
-  for (const [id, on] of [['mt-road', kind === 'road'], ['mt-sky', kind === 'sky'], ['mt-aerial', aerial]]) { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  if (!aerial) state.map.setMapTypeId(k.MapTypeId.ROADMAP);
+  for (const [id, on] of [['mt-road', !aerial], ['mt-aerial', aerial]]) { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  $('mt-labels').hidden = !aerial;
   try { localStorage.setItem(MAPTYPE_KEY, kind); } catch { /* 저장 불가여도 동작 */ }
 }
+const LABELS_KEY = 'heliwx.aerialLabels';
+function setAerialLabels(on) {
+  AERIAL.labelsOn = on;
+  if (AERIAL.map && AERIAL.labels) { if (on) AERIAL.labels.addTo(AERIAL.map); else AERIAL.map.removeLayer(AERIAL.labels); }
+  $('mt-labels').classList.toggle('on', on); $('mt-labels').setAttribute('aria-pressed', on ? 'true' : 'false');
+  try { localStorage.setItem(LABELS_KEY, on ? '1' : '0'); } catch { /* 무시 */ }
+}
 function setupMapType() {
+  if (!state.vworldKey) return;           // 항공사진을 쓸 수 없으면 일반 지도만 사용(버튼 표시 안 함)
   $('maptype').hidden = false;
   $('mt-road').addEventListener('click', () => setMapType('road'));
-  $('mt-sky').addEventListener('click', () => setMapType('sky'));
-  if (state.vworldKey) { $('mt-aerial').hidden = false; $('mt-aerial').addEventListener('click', () => setMapType('aerial')); }
+  $('mt-aerial').addEventListener('click', () => setMapType('aerial'));
+  $('mt-labels').addEventListener('click', () => setAerialLabels(!AERIAL.labelsOn));
+  let on = true; try { on = localStorage.getItem(LABELS_KEY) !== '0'; } catch { /* 무시 */ }
+  AERIAL.labelsOn = on; $('mt-labels').classList.toggle('on', on); $('mt-labels').setAttribute('aria-pressed', on ? 'true' : 'false');
   let k = 'road'; try { k = localStorage.getItem(MAPTYPE_KEY) || 'road'; } catch { /* 무시 */ }
-  if (k === 'sky' || (k === 'aerial' && state.vworldKey)) setMapType(k);
+  if (k === 'aerial') setMapType('aerial');
 }
 // 처음(새로고침) 지도 시점: 대한민국 전체(제주·울릉도·독도 포함)
 function fitKorea() {
