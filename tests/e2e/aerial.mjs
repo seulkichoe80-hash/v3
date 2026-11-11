@@ -44,6 +44,14 @@ if (!/P-518/.test(await page.textContent('#map2'))) fail('항공사진 위 비�
 const before = await page.textContent('#pt-to-loc');
 await page.mouse.click(650, 450); await page.waitForTimeout(500);
 if ((await page.textContent('#pt-to-loc')) === before) fail('항공사진 지도 클릭으로 목적지가 지정되지 않음');
+// 항공사진 화면에서도 위치 찾기: 검색하면 그곳으로 18단계 확대 이동하고 핀이 찍힌다
+await page.fill('#ms-q', '정부대전'); await page.dispatchEvent('#ms-q', 'input');
+await page.waitForFunction(() => /정부대전청사/.test(document.querySelector('#ms-results').textContent), null, { timeout: 5000 });
+await page.click('#ms-results li:has-text("정부대전청사")'); await page.waitForTimeout(300);
+const mv = await page.evaluate(() => { const m = window.__heliAerial.map, c = m.getCenter(); return { z: m.getZoom(), lat: c.lat, lon: c.lng }; });
+if (mv.z !== 18 || Math.abs(mv.lat - 36.3612) > 0.01 || Math.abs(mv.lon - 127.3845) > 0.01) fail('항공사진 위치 이동 이상: ' + JSON.stringify(mv));
+if (!/정부대전청사/.test(await page.textContent('#map2'))) fail('항공사진 위 핀 라벨이 없음');
+await page.click('#ms-close');
 // 확대 한계 21, 아래층(낮은 단계 사진)+위층(19단계)+지명층, 지명 끄기·켜기와 기억
 const info = await page.evaluate(() => { const A = window.__heliAerial; let sat = 0; A.map.eachLayer((l) => { if (l._url && /Satellite/.test(l._url)) sat++; }); return { max: A.map.getMaxZoom(), sat, labels: A.map.hasLayer(A.labels) }; });
 if (info.max !== 21 || info.sat !== 2 || !info.labels) fail('항공사진 지도 설정 이상: ' + JSON.stringify(info));

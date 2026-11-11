@@ -149,7 +149,7 @@ function loadKakao(key) {
         state.kakao = k;
         state.map = new k.Map($('map'), { center: new k.LatLng(36.4, 127.8), level: 12 });
         state.map.addControl(new k.ZoomControl(), k.ControlPosition.RIGHT);
-        fitKorea(); setupMapType();
+        fitKorea(); setupMapType(); $('mapsearch').hidden = false;
         state.geocoder = new k.services.Geocoder();
         state.placeSvc = new k.services.Places();
         setTimeout(syncMapNotams, 0);     // 지도가 준비되면 이미 입력·저장된 NOTAM을 바로 표시
@@ -276,8 +276,8 @@ function searchBox(q, list, onPick) {
           + (note ? `<li class="empty"><small>${esc(note)}</small></li>` : '');
         list.querySelectorAll('li').forEach((li) => {
           const pick = () => {
-            if (li.dataset.f !== undefined) { const p = favs[+li.dataset.f]; onPick({ name: p.name, lat: p.lat, lon: p.lon }); }
-            else { const d = kakao[+li.dataset.i]; onPick({ name: d.place_name, lat: +d.y, lon: +d.x }); }
+            if (li.dataset.f !== undefined) { const p = favs[+li.dataset.f]; onPick({ name: p.name, lat: p.lat, lon: p.lon, addr: p.memo || '' }); }
+            else { const d = kakao[+li.dataset.i]; onPick({ name: d.place_name, lat: +d.y, lon: +d.x, addr: d.road_address_name || (d.address_name !== '주소' ? d.address_name : '') || '' }); }
           };
           const pickClose = () => { pick(); list.innerHTML = ''; };
           li.addEventListener('click', pickClose);
@@ -644,7 +644,7 @@ function toggleLook(key) {
   applyLook();
 }
 function setupExtras() {
-  fillRecentRoutes();
+  fillRecentRoutes(); setupFinder();
   $('recent-routes').addEventListener('change', (e) => { if (e.target.value !== '') applyRoute(loadRoutes()[+e.target.value]); e.target.value = ''; });
   $('swap').addEventListener('click', swapRoute);
   $('depart-now').addEventListener('click', () => { $('depart').value = kstInputNow(); });
@@ -911,9 +911,51 @@ function drawRouteOnly() {
 }
 
 
+
+// ---------- 위치·좌표 찾기: 지도 위 검색창 → 이동·표시·좌표 보기·복사·지점으로 지정 ----------
+function foundText(f) { return `${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}`; }
+function showFound(f, move = true) {
+  state.found = f;
+  const c = $('ms-card'); c.hidden = false;
+  $('ms-name').textContent = f.name; $('ms-addr').textContent = f.addr || '';
+  $('ms-coord').textContent = `${formatCoord(f, fmtNow())}`; $('ms-dec').textContent = foundText(f);
+  if (move) moveMapTo(f);
+  redrawFound();
+}
+function moveMapTo(f) {
+  if (AERIAL.on && AERIAL.map) AERIAL.map.setView([f.lat, f.lon], 18);
+  else if (state.map && state.kakao) { state.map.setCenter(new state.kakao.LatLng(f.lat, f.lon)); state.map.setLevel(3); }
+}
+function redrawFound() {
+  if (state.map && state.kakao) { if (state.foundOv) state.foundOv.setMap(null); state.foundOv = null; if (state.found) { state.foundOv = new state.kakao.CustomOverlay({ position: new state.kakao.LatLng(state.found.lat, state.found.lon), yAnchor: 1, zIndex: 20, content: `<div class="found-pin">📍 ${esc(state.found.name)}</div>` }); state.foundOv.setMap(state.map); } }
+  if (AERIAL.map) { if (AERIAL.foundMk) AERIAL.map.removeLayer(AERIAL.foundMk); AERIAL.foundMk = null; if (state.found && window.L) AERIAL.foundMk = window.L.circleMarker([state.found.lat, state.found.lon], { radius: 9, color: '#fff', weight: 3, fillColor: '#ff9800', fillOpacity: 1 }).addTo(AERIAL.map).bindTooltip(esc(state.found.name), { permanent: true, direction: 'top', className: 'pt-tip', opacity: 1 }); }
+}
+function clearFound() { state.found = null; $('ms-card').hidden = true; redrawFound(); }
+async function copyText(t) { try { await navigator.clipboard.writeText(t); } catch { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
+function setupFinder() {
+  searchBox($('ms-q'), $('ms-results'), (pl) => { $('ms-q').value = ''; showFound(pl, true); });
+  $('ms-close').addEventListener('click', clearFound);
+  $('ms-copy').addEventListener('click', async () => { await copyText(foundText(state.found)); $('ms-copy').textContent = '복사됨'; setTimeout(() => { $('ms-copy').textContent = '좌표 복사'; }, 1400); });
+  const asPoint = (key) => () => { const f = state.found; if (!f) return; setPointByKey(key, { name: f.name, lat: f.lat, lon: f.lon }); showSheet(1); };
+  $('ms-from').addEventListener('click', asPoint('from')); $('ms-to').addEventListener('click', asPoint('to'));
+  $('ms-via').addEventListener('click', () => {
+    const f = state.found; if (!f) return;
+    if (state.points.filter((p) => p.role === 'via').length >= MAX_VIA) { $('run-msg').textContent = `경유지는 최대 ${MAX_VIA}개입니다`; return; }
+    state.points.splice(state.points.length - 1, 0, { role: 'via', name: f.name, lat: f.lat, lon: f.lon, text: formatCoord(f, fmtNow()), stayMin: 0 }); renderPoints(); showSheet(1);
+  });
+  $('ms-save').addEventListener('click', () => {
+    const f = state.found; if (!f) return;
+    showSheet(2); $('place-name').value = f.name.slice(0, 50); $('place-coord').value = formatCoord(f, fmtNow()); $('place-name').focus(); $('place-msg').textContent = '종류·메모를 확인하고 [추가]를 누르세요';
+  });
+}
+
 // ---------- 지도에서 지점 지정(카카오·항공사진 공통) ----------
 function mapClickAt(lat, lon) {
-  if (!$('map-click-on').checked) { $('run-msg').textContent = '지도 클릭으로 지점을 바꾸지 않도록 잠겨 있습니다(판단 실행 후). 바꾸려면 "지도 클릭으로 지점 지정"을 켜세요.'; return; }
+  if (!$('map-click-on').checked) {   // 잠겨 있으면 지점은 바꾸지 않고, 누른 곳의 주소·좌표만 보여 준다
+    const q = { name: `지도 지점(${lat.toFixed(4)}, ${lon.toFixed(4)})`, lat, lon, addr: '' };
+    state.geocoder.coord2Address(lon, lat, (res, st) => { if (st === state.kakao.services.Status.OK && res[0]) { q.name = (res[0].road_address || res[0].address).address_name; } showFound(q, false); });
+    return;
+  }
   const which = state.clickTarget;
   const p = { name: `지도 지점(${lat.toFixed(4)}, ${lon.toFixed(4)})`, lat, lon };
   state.geocoder.coord2Address(p.lon, p.lat, (res, st) => {
@@ -957,7 +999,7 @@ async function setAerial(on) {
     AERIAL.on = true; AERIAL.map.invalidateSize();
     const sw = kb.getSouthWest(), ne = kb.getNorthEast();
     AERIAL.map.fitBounds([[sw.getLat(), sw.getLng()], [ne.getLat(), ne.getLng()]]);
-    drawAerial(state.last ? state.last.result : null, readyPoints().pts);
+    drawAerial(state.last ? state.last.result : null, readyPoints().pts); redrawFound();
   } else {
     AERIAL.on = false; noteMap('');
     if (AERIAL.map) {
@@ -1064,7 +1106,7 @@ function syncMapNotams() {
     const { pts, bad } = readyPoints();
     if (!bad.length && pts.length >= 2) { drawMap(null, null, pts); return; }   // 경로가 있으면 경로와 함께 다시 그림
     clearOverlays(); areaLayer();
-    notamLayer(currentNotams(), null, false); drawAerial(null, []);          // 경로가 없을 때는 지도 시점을 바꾸지 않는다(처음에는 대한민국 전체)
+    notamLayer(currentNotams(), null, false); drawAerial(null, []); redrawFound();          // 경로가 없을 때는 지도 시점을 바꾸지 않는다(처음에는 대한민국 전체)
   }, 250);
 }
 
@@ -1093,7 +1135,7 @@ function drawMap(result, data, pts) {
     for (const l of data.lightning.filter(near)) add(new k.CustomOverlay({ position: ll(l), content: '<div class="bolt" title="낙뢰">✕</div>' }));
   }
   if (!AERIAL.on) state.map.setBounds(b, 60, 60, 60, 60);
-  drawAerial(result, pts);
+  drawAerial(result, pts); redrawFound();
   if (AERIAL.on && pts.length >= 2) AERIAL.map.fitBounds(pts.map((p) => [p.lat, p.lon]), { padding: [60, 60], maxZoom: 15 });
 }
 

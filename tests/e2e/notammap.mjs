@@ -61,4 +61,8 @@ const locked = await toLoc(); await clickMap(); await page.waitForTimeout(200);
 if ((await toLoc()) !== locked) fail('판단 실행 후에도 지도 클릭으로 목적지가 바뀜');
 await page.click('#sheet-tab-1'); await page.check('#map-click-on'); await clickMap(36.2, 128.3); await page.waitForTimeout(200);
 if ((await toLoc()) === locked) fail('잠금을 해제하면 다시 지도 클릭으로 바뀌어야 함');
+// 잠금 상태에서 지도를 누르면 지점은 안 바뀌고 누른 곳의 좌표 카드가 뜬다
+await page.uncheck('#map-click-on'); const keep = await toLoc(); await clickMap(35.5, 128.5); await page.waitForTimeout(300);
+if ((await toLoc()) !== keep) fail('잠금 상태에서 지점이 바뀜');
+if (!(await page.isVisible('#ms-card')) || !/35\.500000, 128\.500000/.test(await page.textContent('#ms-dec'))) fail('잠금 상태 지도 클릭에 좌표 카드가 안 뜸: ' + await page.textContent('#ms-dec'));
 console.log('PASS notammap'); await browser.close(); srv.kill();

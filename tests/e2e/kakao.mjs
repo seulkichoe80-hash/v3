@@ -57,6 +57,26 @@ await page.click('#amb-from-results li:has-text("평남로")');
 if (!/평남로 616/.test(await page.textContent('#amb-loc'))) fail('주소로 고른 현장이 반영되지 않음');
 await page.fill('#amb-to-q', '존재하지않는곳xyz'); await page.dispatchEvent('#amb-to-q', 'input');
 await page.waitForFunction(() => /검색 결과 없음/.test(document.querySelector('#amb-to-results').textContent), null, { timeout: 5000 }).catch(() => fail('결과 없음 안내가 안 나옴'));
+// 지도 위 위치·좌표 찾기: 검색 → 이동·핀·좌표 카드 → 복사·지점 지정
+if (!(await page.isVisible('#ms-q'))) fail('지도 위 검색창이 안 보임');
+await page.fill('#ms-q', '정부대전'); await page.dispatchEvent('#ms-q', 'input');
+await page.waitForFunction(() => /정부대전청사/.test(document.querySelector('#ms-results').textContent), null, { timeout: 5000 }).catch(() => fail('지도 위 검색 결과가 안 나옴'));
+await page.click('#ms-results li:has-text("정부대전청사")');
+if (!(await page.isVisible('#ms-card')) || !/정부대전청사/.test(await page.textContent('#ms-name'))) fail('위치 카드가 안 뜸');
+if (!/36\.361200, 127\.384500/.test(await page.textContent('#ms-dec')) || !/36/.test(await page.textContent('#ms-coord'))) fail('좌표 표시 이상: ' + await page.textContent('#ms-dec'));
+if (!(await page.evaluate(() => (window.__sc || []).some((c) => Math.abs(c[0] - 36.3612) < 1e-6) && window.__sl === 3))) fail('검색한 곳으로 지도가 이동하지 않음');
+await page.click('#ms-via'); if (!/정부대전청사/.test(await page.inputValue('#pt-via1-name'))) fail('[경유지로]가 반영되지 않음');
+await page.click('#ms-to'); if (!/정부대전청사 \(36\.36/.test(await page.textContent('#pt-to-loc'))) fail('[목적지로]가 반영되지 않음');
+await page.click('#ms-save'); if ((await page.inputValue('#place-name')) !== '정부대전청사' || !/36\.36/.test(await page.inputValue('#place-coord'))) fail('[주요지점 저장] 미리 채움 이상');
+await page.click('#sheet-tab-1');
+await page.click('#ms-close'); if (await page.isVisible('#ms-card')) fail('위치 카드 닫기 안 됨');
+// 주소로도 찾기
+await page.fill('#ms-q', '경기 평택시 평남로 616'); await page.dispatchEvent('#ms-q', 'input');
+await page.waitForFunction(() => /경기 평택시 평남로 616/.test(document.querySelector('#ms-results').textContent), null, { timeout: 5000 }).catch(() => fail('주소 검색이 안 됨'));
+await page.click('#ms-results li:has-text("평남로")'); if (!/37\.016000, 127\.077000/.test(await page.textContent('#ms-dec'))) fail('주소 검색 좌표 이상');
+// 좌표를 입력하고 Enter
+await page.fill('#ms-q', '37.5, 127.0'); await page.press('#ms-q', 'Enter'); if (!/37\.500000, 127\.000000/.test(await page.textContent('#ms-dec'))) fail('좌표 입력 이동 이상');
+await page.click('#ms-close');
 // 브이월드 키가 없으면 지도 종류 버튼 전체를 숨기고(일반 지도만), 위성(스카이뷰) 버튼은 없다
 if (await page.isVisible('#maptype')) fail('키가 없는데 지도 종류 버튼이 보임');
 if (await page.locator('#mt-sky').count()) fail('위성 버튼은 삭제되어야 함');

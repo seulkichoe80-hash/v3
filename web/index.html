@@ -127,6 +127,24 @@
   <!-- 지도 -->
   <section class="panel map-wrap" aria-label="지도">
     <div id="map"></div>
+    <div class="mapsearch" id="mapsearch" hidden>
+      <input id="ms-q" type="search" placeholder="장소·주소·좌표 검색 (예: 아주대병원, 37.28, 127.04)" autocomplete="off" aria-label="지도에서 위치 찾기">
+      <ul class="results" id="ms-results"></ul>
+    </div>
+    <div class="mscard" id="ms-card" hidden>
+      <button type="button" id="ms-close" class="ms-x" aria-label="닫기">×</button>
+      <b id="ms-name"></b>
+      <div class="ms-addr" id="ms-addr"></div>
+      <div class="ms-coord">좌표 <code id="ms-coord"></code></div>
+      <div class="ms-coord">십진수 <code id="ms-dec"></code></div>
+      <div class="ms-btns">
+        <button type="button" id="ms-copy" class="mini">좌표 복사</button>
+        <button type="button" id="ms-from" class="mini">출발지로</button>
+        <button type="button" id="ms-via" class="mini">경유지로</button>
+        <button type="button" id="ms-to" class="mini">목적지로</button>
+        <button type="button" id="ms-save" class="mini">주요지점 저장</button>
+      </div>
+    </div>
     <div id="map2" hidden></div>
     <div class="map-note" id="map-note" hidden></div>
     <div class="maptype" id="maptype" role="group" aria-label="지도 종류" hidden>
