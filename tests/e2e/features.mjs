@@ -69,13 +69,26 @@ if (!/육상/.test(await page.textContent('#landsea-auto'))) fail('내륙 경로
 await page.click('#sheet-tab-3'); if (!(await page.isVisible('#notam-1'))) await page.click('#notam-1-sum');
 await page.fill('#notam-1', (await import('node:fs')).readFileSync(ROOT + 'tests/fixtures/notam_d2840.txt', 'utf8'));
 await page.click('#sheet-tab-1'); await page.click('#run'); await ran();
-if ((await page.locator('#notam-list > .n').count()) !== 0) fail('경로와 먼 NOTAM이 본 목록에 나옴');
+if ((await page.locator('#notam-list > .n').count()) !== 0) fail('경로와 먼 NOTAM이 본 목록에 나옴: ' + (await page.textContent('#notam-list')).slice(0, 300));
 if (!/경로상에 해당하는 NOTAM이 없습니다/.test(await page.textContent('#notam-list')) || (await page.locator('#notam-list details.faroff').count()) !== 1) fail('경로 무관 NOTAM 안내가 이상함: ' + await page.textContent('#notam-list'));
 await set('#pt-from-name', '김포'); await set('#pt-from-coord', '37.5583, 126.7906'); await set('#pt-to-name', '서울역'); await set('#pt-to-coord', '37.5547, 126.9707');
 await page.click('#run'); await ran();
 if (!/비행금지구역 P-73/.test(await page.textContent('#rows')) || !/수도방위사령부/.test(await page.textContent('#rows'))) fail('서울역 도착 경로에 P-73 안내가 없음');
 if (!/비행제한구역 R-75/.test(await page.textContent('#rows'))) fail('서울 도착 경로에 R-75 안내가 없음');
 if ((await page.locator('#notam-list > .n').count()) !== 1 || !/D2840\/26/.test(await page.textContent('#notam-list > .n'))) fail('경로에 걸리는 NOTAM이 본 목록에 없음');
+// NOTAM 칸 정리: ①이 비어 있으면 ②③이 ①②로 올라오고, 삭제하면 아래 칸이 당겨진다
+const put = (n, text) => fetch(`http://localhost:${PORT}/api/notams/${n}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+const keys = async () => Object.keys((await (await fetch(`http://localhost:${PORT}/api/notams`)).json()).slots).sort();
+for (const n of [1, 2, 3, 4]) await fetch(`http://localhost:${PORT}/api/notams/${n}`, { method: 'DELETE' });
+await put(2, 'D1111/26 NOTAMN\nE) AAA'); await put(3, 'D2222/26 NOTAMN\nE) BBB');
+await page.reload(); await page.waitForSelector('#map-off:not([hidden])'); await page.click('#sheet-tab-3'); await page.waitForTimeout(800);
+if (!/D1111\/26/.test(await page.inputValue('#notam-1')) || !/D2222\/26/.test(await page.inputValue('#notam-2')) || (await page.locator('#notam-3').count()) !== 0) fail('비어 있는 ①을 채우도록 위로 당겨지지 않음');
+if ((await keys()).join() !== '1,2') fail('서버 저장 위치가 정리되지 않음: ' + await keys());
+await page.click('#notam-1-sum'); page.once('dialog', (d) => d.accept()); await page.click('#notam-1-del');
+await page.waitForFunction(() => /D2222\/26/.test(document.querySelector('#notam-1').value) && document.querySelector('#notam-2').value === '', null, { timeout: 8000 }).catch(() => fail('삭제 뒤 아래 칸이 당겨지지 않음'));
+if ((await keys()).join() !== '1') fail('삭제 뒤 서버 저장이 정리되지 않음: ' + await keys());
+await put(1, ''); await fetch(`http://localhost:${PORT}/api/notams/1`, { method: 'DELETE' });
+await page.click('#sheet-tab-1');
 // 주요지점 CSV: 불러오기(잘못된 줄 건너뜀, 같은 이름 갱신) → 내려받기
 await page.click('#places-sum');
 const csv = '\ufeff이름,종류,위도,경도,메모\r\n가나병원,병원,37.5,127.0,"옥상, 헬리패드"\r\n다라항공대,항공대,36.5,127.2,\r\n오류줄,병원,abc,127,\r\n가나병원,헬리패드,37.6,127.1,수정\r\n';

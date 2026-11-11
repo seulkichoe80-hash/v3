@@ -454,6 +454,7 @@ async function loadNotams() {
   state.notamShared = shared;
   state.slots = {};
   for (const [k, v] of Object.entries(slots)) state.slots[+k] = { text: v.text, savedText: v.text, savedAt: v.savedAt };
+  await compactSlots();
   state.slotCount = Math.min(MAX_SLOTS, Math.max(2, state.slotCount, ...Object.keys(state.slots).map(Number)));
   $('notam-mode').textContent = err ? `⚠ 공유 저장소 오류 — 이 브라우저 저장본 사용 (${err})`
     : shared ? '' : '공유 저장소 미연결 — 이 브라우저에만 저장됩니다';   // 정상(공유 저장)일 때는 안내를 숨김
@@ -500,7 +501,7 @@ function renderSlots() {
     $(`notam-${i}-del`).addEventListener('click', () => {
       if (!ta.value.trim() && !(state.slots[i] || {}).savedText) return;
       if (!confirm(`${CIRCLED[i - 1]}번 칸을 삭제할까요?${state.notamShared ? ' (모든 사용자에게서 삭제됩니다)' : ''}`)) return;
-      deleteSlot(i).then(() => { ta.value = ''; refresh(); syncMapNotams(); updateTabCounts(); });
+      deleteSlot(i).then(async () => { ta.value = ''; refresh(); if (await compactSlots()) renderSlots(); syncMapNotams(); updateTabCounts(); });
     });
     refresh();
   }
@@ -509,7 +510,7 @@ function renderSlots() {
 }
 
 async function saveSlot(i, text) {
-  const st = $(`notam-${i}-status`);
+  const st = $(`notam-${i}-status`) || {};
   try {
     if (state.notamShared) {
       const r = await api(`/api/notams/${i}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
@@ -524,11 +525,26 @@ async function saveSlot(i, text) {
 async function deleteSlot(i) {
   if (state.notamShared) {
     const r = await api(`/api/notams/${i}`, { method: 'DELETE' });
-    if (!r.ok) { $(`notam-${i}-status`).textContent = '삭제 실패'; throw new Error('delete'); }
+    if (!r.ok) { const st = $(`notam-${i}-status`); if (st) st.textContent = '삭제 실패'; throw new Error('delete'); }
   } else { const all = store.get(NOTAM_KEY, {}); delete all[i]; store.set(NOTAM_KEY, all); }
   delete state.slots[i];
 }
 
+// 비어 있는 칸을 앞으로 당겨 ①번부터 차례로 채운다(저장된 NOTAM 기준). 저장하지 않은 편집이 있으면 건드리지 않는다.
+async function compactSlots() {
+  const idx = Object.keys(state.slots).map(Number).sort((a, b) => a - b);
+  const filled = idx.filter((i) => (state.slots[i].savedText || '').trim());
+  const blanks = idx.filter((i) => !(state.slots[i].savedText || '').trim());
+  if (filled.every((orig, n) => orig === n + 1) && !blanks.length) return false;
+  const dirty = Array.from({ length: state.slotCount }, (_, k) => k + 1).some((i) => { const ta = $(`notam-${i}`); return ta && ta.value !== ((state.slots[i] || {}).savedText || ''); });
+  if (dirty) return false;
+  const texts = filled.map((i) => state.slots[i].savedText);
+  try {
+    for (let n = 0; n < texts.length; n++) if ((state.slots[n + 1] || {}).savedText !== texts[n]) await saveSlot(n + 1, texts[n]);
+    for (const i of idx) if (i > texts.length) await deleteSlot(i);
+  } catch { return true; }
+  return true;
+}
 const notamText = () => Array.from({ length: state.slotCount }, (_, k) => $(`notam-${k + 1}`)?.value || '').filter((t) => t.trim()).join('\n\n');
 
 // 판단에 쓸 지점 목록(모두 좌표가 있어야 함)
