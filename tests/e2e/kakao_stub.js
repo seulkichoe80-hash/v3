@@ -9,8 +9,8 @@
   const DB = [{ place_name: '아주대학교병원', y: '37.2790', x: '127.0466', road_address_name: '경기 수원시 영통구 월드컵로 164', address_name: '' },
               { place_name: '정부대전청사', y: '36.3612', x: '127.3845', road_address_name: '대전 서구 청사로 189', address_name: '' }];
   window.kakao = { maps: {
-    load: (cb) => setTimeout(cb, 0), LatLng,
-    Map: function () { this.addControl = noop; this.setBounds = (b) => { (window.__sb = window.__sb || []).push(b && b.pts ? b.pts.slice() : []); }; },
+    load: (cb) => setTimeout(cb, 0), LatLng, MapTypeId: { ROADMAP: 'ROADMAP', SKYVIEW: 'SKYVIEW', HYBRID: 'HYBRID' },
+    Map: function () { this.addControl = noop; this.setMapTypeId = (t) => { (window.__mt = window.__mt || []).push(t); }; this.setBounds = (b) => { (window.__sb = window.__sb || []).push(b && b.pts ? b.pts.slice() : []); }; },
     ZoomControl: function () {}, ControlPosition: { RIGHT: 'R' },
     LatLngBounds: function () { this.pts = []; this.extend = (p) => { this.pts.push([p.lat, p.lng]); }; },
     Polyline: Obj, CustomOverlay: Rec('CustomOverlay'), Circle: Rec('Circle'), Polygon: Rec('Polygon'),

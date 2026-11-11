@@ -149,7 +149,7 @@ function loadKakao(key) {
         state.kakao = k;
         state.map = new k.Map($('map'), { center: new k.LatLng(36.4, 127.8), level: 12 });
         state.map.addControl(new k.ZoomControl(), k.ControlPosition.RIGHT);
-        fitKorea();
+        fitKorea(); setupMapType();
         state.geocoder = new k.services.Geocoder();
         state.placeSvc = new k.services.Places();
         setTimeout(syncMapNotams, 0);     // 지도가 준비되면 이미 입력·저장된 NOTAM을 바로 표시
@@ -919,6 +919,22 @@ function drawRouteOnly() {
   if (state.map && !bad.length && pts.length >= 2) drawMap(null, null, pts);
 }
 
+// 지도 종류 전환: 일반 ↔ 위성(스카이뷰 + 지명 겹침). 선택은 이 브라우저에 기억한다.
+const MAPTYPE_KEY = 'heliwx.maptype';
+function setMapType(kind) {
+  const k = state.kakao; if (!k || !state.map) return;
+  state.map.setMapTypeId(kind === 'sky' ? k.MapTypeId.HYBRID : k.MapTypeId.ROADMAP);
+  $('mt-road').classList.toggle('on', kind !== 'sky'); $('mt-sky').classList.toggle('on', kind === 'sky');
+  $('mt-road').setAttribute('aria-pressed', kind !== 'sky' ? 'true' : 'false'); $('mt-sky').setAttribute('aria-pressed', kind === 'sky' ? 'true' : 'false');
+  try { localStorage.setItem(MAPTYPE_KEY, kind); } catch { /* 저장 불가여도 동작 */ }
+}
+function setupMapType() {
+  $('maptype').hidden = false;
+  $('mt-road').addEventListener('click', () => setMapType('road'));
+  $('mt-sky').addEventListener('click', () => setMapType('sky'));
+  let k = 'road'; try { k = localStorage.getItem(MAPTYPE_KEY) || 'road'; } catch { /* 무시 */ }
+  if (k === 'sky') setMapType('sky');
+}
 // 처음(새로고침) 지도 시점: 대한민국 전체(제주·울릉도·독도 포함)
 function fitKorea() {
   const k = state.kakao; if (!k || !state.map) return;
