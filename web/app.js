@@ -1038,6 +1038,7 @@ function drawAerial(result, pts) {
   const list = result ? result.notams.filter((n) => n.inScope && n.center) : currentNotams();
   list.forEach((n) => {
     const off = n.relation === 'CLEAR' || n.activeDuringFlight === false;
+    L.circle([n.center.lat, n.center.lon], { radius: (n.radiusNm + bufferNm()) * 1852, color: '#ffb300', weight: 2, dashArray: '4 6', opacity: off ? 0.5 : 0.95, fillColor: '#ffb300', fillOpacity: 0.05 }).addTo(g);
     L.circle([n.center.lat, n.center.lon], { radius: n.radiusNm * 1852, color: '#ff2d20', weight: 3, dashArray: off ? '8 6' : null, opacity: off ? 0.7 : 1, fillColor: '#ff2d20', fillOpacity: off ? 0.08 : 0.2 }).addTo(g);
     L.tooltip({ permanent: true, direction: 'top', className: 'nt-tip', opacity: 1 }).setContent(`${esc(n.id || 'NOTAM')}<br>반경 ${esc(fmtNm(n.radiusNm))}<br>${esc(notamPeriod(n))}`).setLatLng([n.center.lat, n.center.lon]).addTo(g);
   });
@@ -1107,11 +1108,14 @@ function notamPeriod(n) {
 function currentNotams() {
   return splitNotams(notamText()).map(parseNotam).filter((n) => n.id && n.series === 'D' && n.center);
 }
+const bufferNm = () => ((state.config && state.config.radius && state.config.radius.notamNearNm) ?? 5);
+const far0 = (n) => n.relation === 'CLEAR' || n.activeDuringFlight === false;
 function notamLayer(list, bounds, extend) {
   const k = state.kakao, ll = (p) => new k.LatLng(p.lat, p.lon);
   list.forEach((n, idx) => {
     const far = n.relation === 'CLEAR';                 // 판단 실행 결과 경로와 무관한 NOTAM은 점선·옅게
     const off = n.activeDuringFlight === false || far;  // 비행 시간대 미발효로 확인된 NOTAM도 점선·옅게
+    add(new k.Circle({ center: ll(n.center), radius: (n.radiusNm + bufferNm()) * 1852, strokeWeight: 2, strokeColor: '#ff8f00', strokeOpacity: far0(n) ? 0.45 : 0.9, strokeStyle: 'shortdash', fillColor: '#ff8f00', fillOpacity: 0.04 }));   // 근접 경고권(버퍼존): 판정에서 "근접"으로 보는 거리
     add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
     add(new k.CustomOverlay({ position: ll(n.center), xAnchor: [0.5, -0.12, 1.12][idx % 3], yAnchor: [1.2, 0.5, 0.5][idx % 3], zIndex: 10 + idx, content: `<div class="nt-label${off ? ' off' : ''}${list.length > 3 ? ' compact' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${far ? ' · 경로 무관' : off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
     if (extend && bounds) bounds.extend(ll(n.center));
