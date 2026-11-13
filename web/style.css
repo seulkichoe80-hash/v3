@@ -424,3 +424,9 @@ details.faroff .n { opacity: .75; }
 @media (max-width: 760px) { #map2 .leaflet-top.leaflet-left { top: 96px; } }
 .tools-top .usage-chip { margin: 0; align-self: center; font-weight: 700; padding: 5px 12px; border: 1px solid rgba(255,255,255,.35); }
 .tools-top .usage-chip b { color: #fff; font-size: 14px; }
+.overall .lab { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0; opacity: .85; margin-bottom: 2px; }
+.opsbox { margin: 8px 0; padding: 10px 14px; border-radius: 10px; border: 2px solid #d49a00; background: #fff8e1; }
+.opsbox[data-grade="NA"] { border-color: #6b7a8a; background: #eef1f4; }
+.opsbox > b { font-size: 18px; color: #8a5a00; } .opsbox[data-grade="NA"] > b { color: #44515f; }
+.opsbox ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; } .opsbox li { margin: 3px 0; }
+.opsbox .note { font-size: 13px; color: #444; }

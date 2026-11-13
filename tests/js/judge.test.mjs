@@ -90,7 +90,7 @@ test('낙뢰 경로 근처 → YELLOW 경로 변경 검토', () => {
 });
 test('NOTAM D2840 → YELLOW, 보고문 포함 / 미입력 → NA', () => {
   const r = evaluate(base({ notams: splitNotams(fx).map(parseNotam) }));
-  assert.equal(r.overall, 'YELLOW'); assert.match(r.reportText, /D2840\/26/); assert.match(r.reportText, /02-524-0315/);
+  assert.equal(r.overall, 'GREEN'); assert.equal(r.opsLevel, 'YELLOW'); assert.ok(r.cautions.some((x) => x.item === 'NOTAM')); assert.match(r.reportText, /주의\(공역·NOTAM\)/); assert.match(r.reportText, /D2840\/26/); assert.match(r.reportText, /02-524-0315/);
   const n = evaluate(base({ notamsProvided: false }));
   assert.ok(n.rows.some((x) => x.item === 'NOTAM' && x.grade === 'NA')); assert.equal(n.overall, 'GREEN'); assert.equal(n.hasNA, true);
 });
@@ -289,4 +289,11 @@ test('SIGWX: 아이콘·선(닫히지 않은 요소)과 중층(mid) 구역은 �
 test('SIGWX: 저시정·지상풍 구역도 경로를 지나면 주의, 0℃ 고도선은 여러 개를 모두 안내', () => {
   const r = sigRow([poly('VIS'), poly('WIND'), { kind: 'FZL', label: '0℃:050', layer: 'low', closed: false, points: [], fzlFt: 5000 }, { kind: 'FZL', label: '0℃:100', layer: 'low', closed: false, points: [], fzlFt: 10000 }]);
   assert.equal(r.grade, 'YELLOW'); assert.match(r.value, /저시정/); assert.match(r.value, /지상풍/); assert.match(r.value, /5000ft·10000ft/);
+});
+
+test('공역·NOTAM은 종합 판정에 넣지 않고 주의로 따로 모은다', () => {
+  const r = evaluate(base({ notams: [parseNotam(readFileSync(new URL('../fixtures/notam_d2840.txt', import.meta.url), 'utf8'))], notamsProvided: true }));
+  assert.equal(r.overall, 'GREEN'); assert.equal(r.opsLevel, 'YELLOW');
+  assert.ok(r.rows.filter((x) => x.item === 'NOTAM').every((x) => x.ops === true));
+  assert.ok(r.rows.filter((x) => x.item === '시정').every((x) => !x.ops));
 });

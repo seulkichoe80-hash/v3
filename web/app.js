@@ -627,7 +627,7 @@ function swapRoute() {
 }
 function headlineText(r, tp) {
   const sev = { RED: 0, YELLOW: 1, NA: 2 };
-  const key = r.rows.filter((x) => x.grade in sev).sort((a, b) => sev[a.grade] - sev[b.grade])[0];
+  const key = r.rows.filter((x) => !x.ops && x.grade in sev).sort((a, b) => sev[a.grade] - sev[b.grade])[0];
   const times = tp && tp.amb ? `헬기 ${tp.heli.totalMin}분 · 구급차 ${tp.amb.totalMin}분` : tp ? `헬기 ${tp.heli.totalMin}분` : '';
   return { l1: times || GRADE_TEXT[r.overall], l2: `${tp ? tp.text : ''}${key ? ` — 핵심: ${key.segment} ${key.item} ${key.value}` : ''}` };
 }
@@ -756,7 +756,10 @@ async function run() {
 function render(r, ctx) {
   const o = $('overall');
   o.className = 'overall'; o.dataset.grade = r.overall;
-  o.innerHTML = `${esc(GRADE_TEXT[r.overall])}${r.overallNote ? `<span class="sub">${esc(r.overallNote)}</span>` : ''}`;
+  o.innerHTML = `<span class="lab">기상 기준 판정</span>${esc(GRADE_TEXT[r.overall])}${r.overallNote ? `<span class="sub">${esc(r.overallNote)}</span>` : ''}`;
+  const ob = $('ops-box');                                      // 공역·NOTAM은 판정과 별도로 '주의'로 표시
+  ob.hidden = !r.cautions.length; ob.dataset.grade = r.opsLevel;
+  ob.innerHTML = r.cautions.length ? `<b>${r.opsLevel === 'YELLOW' ? '주의' : '확인 필요'}</b> <small>공역·NOTAM (기상 판정과 별도)</small><ul>${r.cautions.map((x) => `<li><b>${esc(x.item)}</b> ${esc(x.value)}${x.note ? `<div class="note">${esc(x.note)}</div>` : ''}</li>`).join('')}</ul>` : '';
   $('route-info').innerHTML = [
     ['거리', `${r.distanceKm}km / ${r.distanceNm}NM`], ['소요', `${r.durationMin}분${r.totalStayMin ? ` (체류 ${r.totalStayMin}분)` : ''}`], ['도착 예정', kstStr(r.arriveUtc)],
     ['적용 기준', `${ctx.isNight ? '야간' : '주간'}·${ctx.isSea ? '해상' : '육상'} ${r.limits.visM}m/${r.limits.ceilFt}ft`],
@@ -769,7 +772,7 @@ function render(r, ctx) {
 
   $('rows').innerHTML = r.rows.map((x) => `<tr class="${x.grade}">
     <td data-l="구간">${esc(x.segment)}</td><td data-l="항목">${esc(x.item)}</td><td data-l="값">${esc(x.value)}</td><td data-l="기준">${esc(x.limit)}</td>
-    <td data-l="판정"><span class="badge ${x.grade}">${esc(GRADE_TEXT[x.grade])}</span>${x.note ? `<div class="note">${esc(x.note)}</div>` : ''}</td>
+    <td data-l="판정"><span class="badge ${x.grade}">${esc(x.ops ? (x.grade === 'NA' ? '확인 필요' : x.grade === 'GREEN' ? '해당 없음' : '주의') : GRADE_TEXT[x.grade])}</span>${x.note ? `<div class="note">${esc(x.note)}</div>` : ''}</td>
     <td class="note" data-l="출처">${esc(x.source)}${x.obsTime ? ' · ' + esc(kstStr(x.obsTime)) : ''}</td></tr>`).join('');
 
   $('wind').innerHTML = r.wind.map((w) => `<div class="card"><small>${esc(w.segment)} · ${esc(w.name)}</small>

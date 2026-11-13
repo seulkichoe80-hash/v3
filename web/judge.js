@@ -246,13 +246,13 @@ export function evaluate(input) {
     ...warnRows(data.warn || [], routeRegions, dataStatus.warn, regionsAvailable, seaRoute),
     lightningRow(data.lightning || [], pts, input),
     sigwxRow(data.sigwx, pts, input),
-    ...airspaceRows(input.airspaceAreas, pts, (config.radius || {}).airspaceNearNm ?? 3),
+    ...airspaceRows(input.airspaceAreas, pts, (config.radius || {}).airspaceNearNm ?? 3).map((x) => ({ ...x, ops: true })),   // ops = 기상 기준 밖(공역·NOTAM): 판정에 넣지 않고 '주의'로 따로 안내
   ];
 
   const assessed = notams.map((n) => assessNotamRoute(n, pts, departUtc, arriveUtc, config.radius.notamNearNm));
   const relevant = assessed.filter((n) => n.inScope && n.grade !== 'GREEN');
-  if (!notamsProvided) rows.push({ segment: '경로', item: 'NOTAM', value: '미입력', limit: '경로 관련 없음', grade: 'NA', source: 'xNotam', obsTime: null, note: 'xNotam 조회 후 붙여넣기' });
-  else if (!relevant.length) rows.push({ segment: '경로', item: 'NOTAM', value: `경로 관련 D NOTAM 없음 (입력 ${assessed.length}건)`, limit: '경로 관련 없음', grade: 'GREEN', source: 'xNotam', obsTime: null, note: '' });
+  if (!notamsProvided) rows.push({ ops: true, segment: '경로', item: 'NOTAM', value: '미입력', limit: '경로 관련 없음', grade: 'NA', source: 'xNotam', obsTime: null, note: 'xNotam 조회 후 붙여넣기' });
+  else if (!relevant.length) rows.push({ ops: true, segment: '경로', item: 'NOTAM', value: `경로 관련 D NOTAM 없음 (입력 ${assessed.length}건)`, limit: '경로 관련 없음', grade: 'GREEN', source: 'xNotam', obsTime: null, note: '' });
   for (const n of relevant) {
     const rel = n.relation === 'CROSS' ? (n.prohibited ? '비행금지구역 통과' : '경로 통과') : n.relation === 'BUFFER' ? '완충구역 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : '위치 해석 불가';
     const tel = n.phones.length ? ' ' + n.phones.join(', ') : '';
@@ -260,7 +260,7 @@ export function evaluate(input) {
       : n.relation === 'CROSS' && n.prohibited ? `비행금지구역 내부 — 진입 불가(원문 예외 확인)${n.needsPermission ? ' · 사전조율·승인' + tel : ''}`
       : n.relation === 'BUFFER' ? `완충구역(금지구역 바깥 ${n.buffer.widthNm}NM) 통과 — 사전조율·승인 필요${tel}`
       : n.needsPermission ? `소방헬기 사전허가 필요${tel}` : '';
-    rows.push({ segment: '경로', item: 'NOTAM', value: `${n.id || '해석 불가'} ${n.qcodeText || ''} ${rel}`.trim(), limit: '경로 관련 없음', grade: n.grade, source: 'xNotam', obsTime: null, note });
+    rows.push({ ops: true, segment: '경로', item: 'NOTAM', value: `${n.id || '해석 불가'} ${n.qcodeText || ''} ${rel}`.trim(), limit: '경로 관련 없음', grade: n.grade, source: 'xNotam', obsTime: null, note });
   }
 
   const wind = pts.map((p, i) => windInfo(segName(i), p, data.aws || [], metars, now, config));
@@ -283,16 +283,21 @@ export function evaluate(input) {
     if (soon) sunNote = `${when(soon.s)} 일몰 ${Math.round(soon.m)}분 전`;
   }
 
-  const grades = rows.map((r) => r.grade);
-  const hasNA = grades.includes('NA');
-  const coreNA = rows.some((r) => r.segment !== '경로' && (r.item === '시정' || r.item === '운고') && r.grade === 'NA');
+  // 종합 판정은 기상 기준(시정·운고·TAF·특보·낙뢰·저고도 중요기상)만으로 낸다. 공역·NOTAM은 '주의'로 따로 모은다.
+  const wrows = rows.filter((r) => !r.ops), orows = rows.filter((r) => r.ops);
+  const grades = wrows.map((r) => r.grade);
+  const hasNA = rows.some((r) => r.grade === 'NA');
+  const wNA = grades.includes('NA');
+  const coreNA = wrows.some((r) => r.segment !== '경로' && (r.item === '시정' || r.item === '운고') && r.grade === 'NA');
   let overall = grades.includes('RED') ? 'RED' : grades.includes('YELLOW') ? 'YELLOW' : coreNA ? 'NA' : 'GREEN';
   let overallNote = '';
   if (overall === 'RED') overallNote = PROVISO;
   else if (overall === 'NA') overallNote = '핵심 기상자료 없음 — 직접 확인';
-  else if (overall === 'GREEN' && hasNA) overallNote = '단, 일부 자료 확인 필요';
+  else if (overall === 'GREEN' && wNA) overallNote = '단, 일부 자료 확인 필요';
+  const cautions = orows.filter((r) => r.grade !== 'GREEN');          // 공역·NOTAM 주의 목록(NA=확인 필요 포함)
+  const opsLevel = cautions.some((r) => r.grade === 'RED' || r.grade === 'YELLOW') ? 'YELLOW' : cautions.length ? 'NA' : 'GREEN';
 
-  const result = { overall, overallNote, distanceKm: Math.round(distKm * 10) / 10, distanceNm: Math.round((distKm / KM_PER_NM) * 10) / 10,
+  const result = { overall, overallNote, cautions, opsLevel, distanceKm: Math.round(distKm * 10) / 10, distanceNm: Math.round((distKm / KM_PER_NM) * 10) / 10,
     durationMin: Math.round(durationMin), arriveUtc, limits, rows, wind, notams: assessed, hasNA, legs, totalStayMin, points: pts, sun, sunNote };
   result.reportText = buildReport(result, input);
   return result;
@@ -303,13 +308,14 @@ function buildReport(r, input) {
   const names = r.points.map((p, i) => (i > 0 && i < r.points.length - 1 ? '(경유)' : '') + p.name).join('→');
   const stay = r.totalStayMin ? `체류 ${r.totalStayMin}분 포함, ` : '';
   const parts = [`[재난하늘119 출동판단] ${names} ${r.distanceKm}km/${r.durationMin}분(${stay}도착 ${fmtKst(r.arriveUtc)})`,
-    `종합: ${GRADE_TEXT[r.overall]}${r.overallNote ? ' (' + r.overallNote + ')' : ''}`,
+    `기상 기준 판정: ${GRADE_TEXT[r.overall]}${r.overallNote ? ' (' + r.overallNote + ')' : ''}`,
+    ...(r.cautions.length ? [`주의(공역·NOTAM): ` + r.cautions.map((x) => `${x.item} ${x.value}${x.note ? ' — ' + x.note : ''}`).join(' / ')] : []),
     `적용기준 ${isNight ? '야간' : '주간'}·${isSea ? '해상' : '육상'} 시정 ${r.limits.visM}m·운고 ${r.limits.ceilFt}ft`];
   const ds = r.sun[r.sun.length - 1];
   parts.push(`일출 ${fmtKst(ds.sunrise)} / 일몰 ${fmtKst(ds.sunset)}(목적지)${r.sunNote ? ' · ' + r.sunNote : ''}`);
   const dest = r.rows.filter((x) => x.segment === '목적지');
   if (dest.length) parts.push('목적지 ' + dest.map((x) => `${x.item} ${x.value}(${GRADE_TEXT[x.grade]})`).join('·'));
-  for (const x of r.rows.filter((x) => x.segment !== '목적지' && x.grade !== 'GREEN')) {
+  for (const x of r.rows.filter((x) => !x.ops && x.segment !== '목적지' && x.grade !== 'GREEN')) {
     parts.push(`${x.item}${x.segment !== '경로' ? '(' + x.segment + ')' : ''} ${x.value}${x.note ? ' — ' + x.note : ''}`);
   }
   const w = r.wind.find((x) => x.segment === '목적지');
