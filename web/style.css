@@ -391,3 +391,13 @@ details.faroff .n { opacity: .75; }
 .legend .bz { color: #e68a00; font-weight: 700; }
 .notam-list .nbuf { color: #9a5300; font-weight: 700; margin-top: 2px; } .notam-list .nbuf small { font-weight: 400; color: #7a6a50; }
 .notam-list .nexc { font-size: 12px; color: #444; margin-top: 3px; background: #fff8e1; border-radius: 4px; padding: 2px 6px; }
+
+/* ④ 임무브리핑 */
+.br-top { display: grid; grid-template-columns: 1fr 1.6fr auto; gap: 8px; margin: 8px 0; }
+.br-top label, .br-msg { display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 700; }
+.br-row { display: grid; grid-template-columns: 170px 1fr; gap: 8px; align-items: start; margin: 4px 0; }
+.br-row > label { font-size: 13px; font-weight: 700; padding-top: 7px; }
+.br-in { position: relative; } .br-in input { width: 100%; box-sizing: border-box; }
+.br-etc { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 8px 0; }
+.br-msg textarea { width: 100%; box-sizing: border-box; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+@media (max-width: 700px) { .br-top { grid-template-columns: 1fr; } .br-row { grid-template-columns: 1fr; } .br-row > label { padding-top: 0; } }

@@ -6,6 +6,7 @@ import { AREAS, AIRAC_NOTE } from './airspace.js';
 import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
 import { evaluate, GRADE_TEXT, dirText, SIGWX_TEXT } from './judge.js';
+import { TEMPLATES, ETC_CHECKS, composeLoc, buildBrief } from './brief.js';
 import { criteriaTable, art22Items } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
@@ -81,6 +82,7 @@ async function init() {
   showHistoryCount();
   $('usage-csv').addEventListener('click', downloadUsage);
   wireAmb();
+  setupBrief();
   setupSheets();
   setupExtras();
   document.querySelectorAll('.info-btn').forEach((b) => b.addEventListener('click', () => { const t = $(b.dataset.target); if (t) t.hidden = !t.hidden; }));
@@ -893,12 +895,13 @@ function showSheet(n) {
   n = String(n);
   document.querySelectorAll('.sheet-tab').forEach((b) => { const on = b.dataset.sheet === n; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
   document.querySelectorAll('.sheet').forEach((d) => { d.hidden = d.id !== 'sheet-' + n; });
+  const rb = $('runbar'); if (rb) rb.hidden = n === '4';          // 임무브리핑에는 판단 실행 줄이 필요 없음
   try { sessionStorage.setItem(SHEET_KEY, n); } catch { /* 저장 불가여도 동작 */ }
 }
 function setupSheets() {
   document.querySelectorAll('.sheet-tab').forEach((b) => b.addEventListener('click', () => showSheet(b.dataset.sheet)));
   let n = '1'; try { n = sessionStorage.getItem(SHEET_KEY) || '1'; } catch { /* 무시 */ }
-  showSheet(['1', '2', '3'].includes(n) ? n : '1');
+  showSheet(['1', '2', '3', '4'].includes(n) ? n : '1');
 }
 function updateTabCounts() { /* 탭에는 개수를 표시하지 않음 */ }
 function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM`; }   // NOTAM 화면은 NM만 표시(km 병기 없음)
@@ -1166,3 +1169,48 @@ function drawMap(result, data, pts) {
 }
 
 init().catch((e) => { $('run-msg').textContent = '초기화 실패: ' + e.message; });
+
+// ---------- ④ 임무브리핑: 출동 정보를 메신저로 미리 알리는 전송문 ----------
+const BR_KEY = 'heliwx.brief';
+function setupBrief() {
+  const saved = store.get(BR_KEY, {});
+  const br = { tpl: TEMPLATES.find((t) => t.id === saved.tpl) || TEMPLATES[0], values: {}, etc: new Set(), custom: false };
+  $('br-unit').value = saved.unit || '';
+  $('br-fmt').value = ['dd', 'ddm', 'dms'].includes(saved.fmt) ? saved.fmt : (fmtNow() || 'dd');
+  const save = () => store.set(BR_KEY, { tpl: br.tpl.id, unit: $('br-unit').value, fmt: $('br-fmt').value });
+  const refresh = () => {                                     // 전송문을 다시 만든다(직접 고친 뒤에는 덮어쓰지 않음)
+    if (br.custom) return;
+    $('br-out').value = buildBrief({ tpl: br.tpl, unit: $('br-unit').value, title: $('br-title').value, values: br.values, etcChecks: [...br.etc], etcText: br.etcText || '' });
+  };
+  const build = () => {
+    $('br-types').innerHTML = TEMPLATES.map((t) => `<button type="button" class="chip${t.id === br.tpl.id ? ' on' : ''}" data-t="${t.id}">${esc(t.name)}</button>`).join('');
+    $('br-title').value = br.tpl.title; br.values = {}; br.etc = new Set(); br.etcText = ''; br.custom = false;
+    $('br-fields').innerHTML = br.tpl.fields.map((f) => `<div class="br-row"><label>${esc(f.label)}</label><div class="br-in">`
+      + `<input type="text" data-k="${f.k}" placeholder="${esc(f.type === 'place' ? '장소·주소 검색 → 좌표 자동 입력' : f.ph)}" autocomplete="off">`
+      + (f.type === 'place' ? `<ul class="results" data-r="${f.k}"></ul>` : '') + '</div></div>').join('');
+    $('br-etc').innerHTML = '<b>기타</b> ' + ETC_CHECKS.map((c, i) => `<label class="inline"><input type="checkbox" data-etc="${esc(c)}"> ${esc(c)}</label>`).join(' ')
+      + ' <input type="text" id="br-etc-text" placeholder="직접 입력" autocomplete="off">';
+    br.tpl.fields.forEach((f) => {
+      const inp = $('br-fields').querySelector(`input[data-k="${f.k}"]`);
+      inp.addEventListener('input', () => { br.values[f.k] = inp.value; br.custom = false; refresh(); });
+      if (f.type === 'place') {
+        const ul = $('br-fields').querySelector(`ul[data-r="${f.k}"]`);
+        searchBox(inp, ul, (pl) => { inp.value = composeLoc(pl, $('br-fmt').value); br.values[f.k] = inp.value; br.places = { ...(br.places || {}), [f.k]: pl }; br.custom = false; refresh(); });
+      }
+    });
+    $('br-etc').querySelectorAll('input[data-etc]').forEach((c) => c.addEventListener('change', () => { c.checked ? br.etc.add(c.dataset.etc) : br.etc.delete(c.dataset.etc); br.custom = false; refresh(); }));
+    $('br-etc-text').addEventListener('input', (e) => { br.etcText = e.target.value; br.custom = false; refresh(); });
+    br.places = {}; refresh(); save();
+  };
+  $('br-types').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; br.tpl = TEMPLATES.find((t) => t.id === b.dataset.t); build(); });
+  $('br-unit').addEventListener('input', () => { br.custom = false; refresh(); save(); });
+  $('br-title').addEventListener('input', () => { br.custom = false; refresh(); });
+  $('br-fmt').addEventListener('change', () => {              // 좌표 형식을 바꾸면 이미 고른 장소의 좌표도 새 형식으로
+    for (const [k, pl] of Object.entries(br.places || {})) { const inp = $('br-fields').querySelector(`input[data-k="${k}"]`); if (inp) { inp.value = composeLoc(pl, $('br-fmt').value); br.values[k] = inp.value; } }
+    br.custom = false; refresh(); save();
+  });
+  $('br-out').addEventListener('input', () => { br.custom = true; });
+  $('br-copy').addEventListener('click', async () => { await copyText($('br-out').value); $('br-msg').textContent = '복사했습니다 — 메신저에 붙여넣으세요'; setTimeout(() => { $('br-msg').textContent = ''; }, 3000); });
+  $('br-reset').addEventListener('click', build);
+  build();
+}

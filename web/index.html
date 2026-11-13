@@ -51,6 +51,7 @@
       <button type="button" role="tab" class="sheet-tab on" id="sheet-tab-1" data-sheet="1" aria-selected="true" aria-controls="sheet-1">① 임무 입력</button>
       <button type="button" role="tab" class="sheet-tab" id="places-sum" data-sheet="2" aria-selected="false" aria-controls="sheet-2">② 주요지점</button>
       <button type="button" role="tab" class="sheet-tab" id="sheet-tab-3" data-sheet="3" aria-selected="false" aria-controls="sheet-3">③ 항공고시보</button>
+      <button type="button" role="tab" class="sheet-tab" id="sheet-tab-4" data-sheet="4" aria-selected="false" aria-controls="sheet-4">④ 임무브리핑</button>
     </div>
     <div class="sheet" id="sheet-1" role="tabpanel" aria-labelledby="sheet-tab-1">
     <label class="inline toggle"><input type="checkbox" id="coord-toggle"> 좌표 직접 입력</label>
@@ -117,8 +118,20 @@
     <a class="ext" href="https://aim.koca.go.kr/xNotam/index.do?type=search2&amp;language=ko_KR" target="_blank" rel="noopener">xNotam 열기 ↗</a>
 
     </div>
+    <div class="sheet" id="sheet-4" role="tabpanel" aria-labelledby="sheet-tab-4" hidden>
+      <div class="chips" id="br-types" role="group" aria-label="임무 구분"></div>
+      <div class="br-top">
+        <label>소속·호출부호 <input id="br-unit" type="text" placeholder="예: 중앙 1호" autocomplete="off"></label>
+        <label>제목 <input id="br-title" type="text" autocomplete="off"></label>
+        <label>좌표 형식 <select id="br-fmt"><option value="dd">십진수</option><option value="ddm">도·분</option><option value="dms">도·분·초</option></select></label>
+      </div>
+      <div id="br-fields"></div>
+      <div class="br-etc" id="br-etc"></div>
+      <label class="br-msg">메신저 전송문 <textarea id="br-out" rows="9" spellcheck="false"></textarea></label>
+      <div class="rowbtns"><button type="button" id="br-copy" class="run">복사</button><button type="button" id="br-reset" class="ghost">처음부터</button><span class="hint" id="br-msg" role="status"></span></div>
+    </div>
 
-    <div class="runbar">
+    <div class="runbar" id="runbar">
       <button id="run" class="run" type="button">판단 실행</button>
       <p class="hint" id="run-msg" role="status"></p>
     </div>

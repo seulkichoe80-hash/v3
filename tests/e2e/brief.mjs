@@ -1,0 +1,35 @@
+// ④ 임무브리핑: 양식 전환, 장소 검색 → 좌표 자동 입력, 전송문 생성·좌표 형식 변경·복사
+import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
+const require = createRequire(import.meta.url);
+let pw; try { pw = require('playwright'); } catch { pw = require('/opt/node22/lib/node_modules/playwright'); }
+const PORT = 8031, ROOT = new URL('../../', import.meta.url).pathname;
+const srv = spawn('python3', ['run.py', '--mock', '--port', String(PORT), '--no-browser'], { cwd: ROOT, env: { ...process.env, HELIWX_NOTAM_FILE: `/tmp/br-${Date.now()}.json` } });
+const fail = (m) => { console.error('FAIL:', m); srv.kill(); process.exit(1); };
+for (let i = 0; i < 40; i++) { try { await fetch(`http://localhost:${PORT}/api/client-config`); break; } catch { await new Promise((r) => setTimeout(r, 200)); } }
+await fetch(`http://localhost:${PORT}/api/places`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '아주대병원', lat: 37.279, lon: 127.0466, memo: '경기 수원시 영통구 월드컵로 164', cat: '병원' }) });
+const browser = await pw.chromium.launch(); const ctx = await browser.newContext(); await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+const page = await ctx.newPage();
+await page.route(/dapi\.kakao\.com/, (r) => r.abort());
+await page.goto(`http://localhost:${PORT}/`); await page.waitForSelector('#map-off:not([hidden])');
+await page.click('#sheet-tab-4');
+if (!(await page.isVisible('#sheet-4')) || (await page.isVisible('#run'))) fail('④ 시트가 보이고 판단 실행은 숨겨져야 함');
+if ((await page.locator('#br-types .chip').count()) !== 6) fail('양식 6종');
+await page.fill('#br-unit', '중앙 1호');
+await page.click('#br-types .chip[data-t="ems"]');
+await page.fill('input[data-k="take"]', '아주대'); await page.waitForSelector('ul[data-r="take"] li');
+await page.click('ul[data-r="take"] li');
+let v = await page.inputValue('input[data-k="take"]'); if (!/아주대병원\(37\.27900, 127\.04660\)/.test(v)) fail('좌표 자동 입력: ' + v);
+let out = await page.inputValue('#br-out');
+if (!out.startsWith('[중앙 1호] 전원, HELI-EMS, 응급환자 이송') || !out.includes('- 환자 인수 : ' + v)) fail('전송문: ' + out);
+await page.selectOption('#br-fmt', 'ddm');
+v = await page.inputValue('input[data-k="take"]'); if (!/37°16\.740'N 127°02\.796'E/.test(v)) fail('형식 변경 반영: ' + v);
+await page.check('input[data-etc="P-518"]'); await page.fill('#br-etc-text', '연료보급');
+out = await page.inputValue('#br-out'); if (!out.includes('- 기타 : P-518, 연료보급')) fail('기타: ' + out);
+await page.click('#br-copy'); const clip = await page.evaluate(() => navigator.clipboard.readText()); if (clip !== out) fail('복사 내용 불일치');
+await page.fill('input[data-k="give"]', '37.5, 127.0'); await page.press('input[data-k="give"]', 'Enter');
+if (!/\(37°30\.000'N 127°00\.000'E\)/.test(await page.inputValue('input[data-k="give"]'))) fail('좌표 직접 입력: ' + await page.inputValue('input[data-k="give"]'));
+await page.reload(); await page.waitForSelector('#map-off:not([hidden])'); await page.click('#sheet-tab-4');
+if ((await page.inputValue('#br-unit')) !== '중앙 1호') fail('소속 기억');
+await page.click('#sheet-tab-1'); if (!(await page.isVisible('#run'))) fail('①에서 판단 실행 보여야 함');
+console.log('PASS brief'); await browser.close(); srv.kill();
