@@ -49,3 +49,10 @@ test('R-75: 좌표 15점, 서울 도심은 안·수원/인천은 밖, 비행제�
   const row = rows.find((x) => /R-75/.test(x.item));
   assert.ok(row && /비행제한구역/.test(row.item) && row.grade === 'YELLOW' && /승인/.test(row.limit + row.note) && /수도방위사령부/.test(row.note), JSON.stringify(rows));
 });
+
+test('P-518 S1(인천공항 보호구역): AIP 좌표 5점, 고도 1,600~6,000ft, 경로가 지나면 주의', () => {
+  const s = byId('P518S1'); assert.equal(s.poly.length, 5);
+  assert.match(s.lower, /1,600/); assert.match(s.upper, /6,000/);
+  const rows = airspaceRows(AREAS, [{ lat: 37.69, lon: 126.2 }, { lat: 37.69, lon: 126.5 }], 3);
+  assert.ok(rows.some((r) => /P-518 S1/.test(r.item) && /통과/.test(r.value)), JSON.stringify(rows.map((r) => r.item + r.value)));
+});

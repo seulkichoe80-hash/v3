@@ -38,17 +38,23 @@ export const AREAS = [
   },
   {
     id: 'P518W', short: 'P-518W', name: '한반도 전술구역(서부)', kind: 'P', upper: 'UNL', lower: 'GND', authority: 'MCRC/FOC · VMC-IMC',
-    remark: '비무장지대 서측 해상. 북방한계선(NLL) 구간은 표에 중간 좌표가 없어 두 지점을 직선으로 이은 근사', label: { lat: 37.75, lon: 125.0 }, color: '#8e24aa',
+    remark: '비무장지대 서측 해상. AIP 원문이 북방한계선(NLL)을 "eastward along the Northern Limit line"으로만 적어 그 구간(124°51′E~126°06′E 사이)은 두 지점을 직선으로 이음', label: { lat: 37.75, lon: 125.0 }, color: '#8e24aa',
     poly: ring(['380000N 1240900E', '380000N 1245100E', '374255N 1260633E', '374213N 1260951E', '373900N 1261000E', '373000N 1255000E', '373000N 1243800E']),
-    approx: '북방한계선(NLL) 구간은 직선 근사 — 경계 근처는 실제와 다를 수 있음',
+    approx: 'AIP가 NLL 구간 좌표를 주지 않아 직선으로 이음 — NLL 근처 경계는 실제와 다를 수 있음',
   },
   {
     id: 'P518', short: 'P-518', name: '한반도 전술구역(휴전선 일대)', kind: 'P', upper: 'UNL', lower: 'GND', authority: 'MCRC/FOC · VMC-IMC',
-    remark: '군사분계선과 아래 선 사이 구역. 민간회랑·인천공항 보호구역은 관제 IFR 항공기 전용이며 VFR(소방헬기)은 사용 불가',
+    remark: '군사분계선과 아래 선 사이 구역. 민간회랑(평일 0700~1200UTC, 토·일·공휴일 0300~1200UTC 운영, DEFCON-III 등에서는 ATC 사전조율 없이 폐쇄 가능)은 관제 IFR 항공기용',
     label: { lat: 38.05, lon: 127.0 }, color: '#8e24aa',
     // 남쪽 경계선은 AIP 좌표 그대로. 북쪽(군사분계선)은 좌표가 없어 북위 39°까지로 단순화(경로 판정에는 남쪽 경계만 쓰임)
     poly: [...ring(['373900N 1261000E', '374300N 1264100E', '373800N 1265300E', '375800N 1274000E', '380400N 1283100E', '380800N 1283200E', '381200N 1283600E']), { lat: 39.0, lon: 128.6 }, { lat: 39.0, lon: 126.1667 }],
-    approx: '북쪽 경계(군사분계선)는 북위 39°로 단순화, 해안선 부분은 가장 가까운 지점으로 근사',
+    approx: '북쪽 경계(AIP는 군사분계선이라고만 적음)는 북위 39°로 단순화, 해안선 부분은 가장 가까운 지점으로 근사',
+  },
+  {
+    id: 'P518S1', short: 'P-518 S1', name: '인천공항 계기비행절차 보호구역(S1)', kind: 'P', upper: '6,000ft AMSL', lower: '1,600ft AMSL', authority: '서울접근관제소(Seoul Approach)',
+    remark: 'RK P518 비고: 서울접근관제소의 관제 IFR 항공기만 사용 가능, VFR 항공기는 사용 불가. 해당 고도(1,600~6,000ft AMSL) 안에서만 적용', label: { lat: 37.72, lon: 126.45 }, color: '#8e24aa',
+    poly: ring(['374153N 1261628E', '374336N 1262933E', '374208N 1263410E', '373936N 1261436E', '374028N 1261446E']),
+    approx: '',
   },
   {
     id: 'P518E', short: 'P-518E', name: '한반도 전술구역(동부)', kind: 'P', upper: 'UNL', lower: 'GND', authority: 'MCRC/FOC · VMC-IMC',
