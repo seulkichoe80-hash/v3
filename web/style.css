@@ -422,3 +422,5 @@ details.faroff .n { opacity: .75; }
 /* 항공사진(Leaflet) 확대·축소 버튼은 지도 종류 버튼 아래로 간격을 둔다 */
 #map2 .leaflet-top.leaflet-left { top: 48px; }
 @media (max-width: 760px) { #map2 .leaflet-top.leaflet-left { top: 96px; } }
+.tools-top .usage-chip { margin: 0; align-self: center; font-weight: 700; padding: 5px 12px; border: 1px solid rgba(255,255,255,.35); }
+.tools-top .usage-chip b { color: #fff; font-size: 14px; }
