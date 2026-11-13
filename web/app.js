@@ -1199,11 +1199,11 @@ function setupBrief() {
     drawTypes(); br.values = {}; br.etc = new Set(); br.routes = new Set(); br.etcText = ''; br.custom = false; br.places = {};
     $('br-fields').innerHTML = br.tpl.fields.map((f) => `<div class="br-row"><label class="br-lab"><input type="checkbox" data-clr="${f.k}" title="이 칸 지우기" aria-label="${esc(f.label)} 지우기"> ${esc(f.label)}</label><div class="br-in">`
       + `<input type="text" data-k="${f.k}" placeholder="${esc(f.type === 'place' ? '장소·주소 검색 → 좌표 자동 입력' : f.ph)}" autocomplete="off">`
-      + (f.type === 'place' ? `<ul class="results" data-r="${f.k}"></ul><input type="text" class="br-coord" data-ck="${f.k}" placeholder="좌표 입력 → 주소·좌표 자동 (예: 37.5583, 126.7906)" autocomplete="off">` : '')
+      + (f.type === 'place' ? `<ul class="results" data-r="${f.k}"></ul><input type="text" class="br-coord" data-ck="${f.k}" placeholder="좌표 입력 (예: 37.55, 126.79)" autocomplete="off">` : '')
       + '</div></div>').join('');
-    $('br-etc').innerHTML = '<b>기타</b> ' + ETC_CHECKS.map((c) => `<label class="inline"><input type="checkbox" data-etc="${esc(c)}"> ${esc(c)}</label>`).join(' ')
-      + ' · ' + ROUTE_HOSPS.map((c) => `<label class="inline"><input type="checkbox" data-route="${esc(c)}"> ${esc(c)}</label>`).join(' ')
-      + ' <input type="text" id="br-etc-text" placeholder="직접 입력" autocomplete="off">';
+    $('br-etc').innerHTML = '<div class="br-etcrow"><b>기타</b>' + ETC_CHECKS.map((c) => `<label class="inline"><input type="checkbox" data-etc="${esc(c)}"> ${esc(c)}</label>`).join('') + '</div>'
+      + '<div class="br-etcrow"><b>경로</b>' + ROUTE_HOSPS.map((c) => `<label class="inline"><input type="checkbox" data-route="${esc(c)}"> ${esc(c)}</label>`).join('') + '</div>'
+      + '<input type="text" id="br-etc-text" placeholder="기타 직접 입력" autocomplete="off">';
     br.tpl.fields.forEach((f) => {
       const inp = $('br-fields').querySelector(`input[data-k="${f.k}"]`);
       inp.addEventListener('input', () => { br.values[f.k] = inp.value; br.custom = false; refresh(); });

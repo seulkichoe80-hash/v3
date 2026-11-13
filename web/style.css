@@ -409,4 +409,13 @@ details.faroff .n { opacity: .75; }
 .br-coord { margin-top: 4px; }
 .br-clr { font-size: 12.5px; padding-top: 8px; white-space: nowrap; cursor: pointer; }
 .br-row > .br-clr { font-weight: 600; }
-.br-lab input { margin-right: 4px; vertical-align: -2px; }
+
+.br-row > label.br-lab { display: flex; align-items: center; gap: 8px; padding-top: 0; min-height: 36px; line-height: 1.3; }
+.br-lab input[type=checkbox] { width: 16px; height: 16px; flex: none; padding: 0; margin: 0; vertical-align: baseline; }
+.br-row { align-items: start; }
+.br-row > label.br-lab { align-self: start; }
+.br-etc { display: block; }
+.br-etcrow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; margin: 2px 0 6px; }
+.br-etcrow b { width: 36px; font-size: 13px; }
+.br-etcrow label.inline { margin: 4px 0 0 0; }
+#br-etc-text { margin-top: 2px; }
