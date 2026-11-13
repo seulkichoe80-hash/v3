@@ -1173,12 +1173,13 @@ init().catch((e) => { $('run-msg').textContent = '초기화 실패: ' + e.messag
 // ---------- ④ 임무브리핑: 출동 정보를 메신저로 미리 알리는 전송문 ----------
 const BR_KEY = 'heliwx.brief';
 function setupBrief() {
-  const saved = store.get(BR_KEY, {});
+  const saved = {};                                           // 새로고침하면 다른 입력처럼 초기화(저장하지 않음)
+  try { localStorage.removeItem(BR_KEY); } catch { /* 무시 */ }
   const find = (kind) => { for (const [ci, c] of CATS.entries()) for (const [n, id] of c.items) if (n === kind) return { ci, kind: n, tpl: TEMPLATES.find((t) => t.id === id) }; return null; };
   const br = { ...(find(saved.kind) || find('산불')), values: {}, etc: new Set(), routes: new Set(), etcText: '', custom: false, places: {} };
   $('br-unit').value = saved.unit || '';
   $('br-fmt').value = ['dd', 'ddm', 'dms'].includes(saved.fmt) ? saved.fmt : (fmtNow() || 'dd');
-  const save = () => store.set(BR_KEY, { kind: br.kind, unit: $('br-unit').value, fmt: $('br-fmt').value });
+  const save = () => {};
   const title = () => titleOf($('br-region').value, br.kind);
   const refresh = () => {                                     // 전송문을 다시 만든다(직접 고친 뒤에는 덮어쓰지 않음)
     $('br-title-show').textContent = title();

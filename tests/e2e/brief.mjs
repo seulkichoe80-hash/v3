@@ -35,6 +35,6 @@ await page.click('#br-copy'); const clip = await page.evaluate(() => navigator.c
 await page.fill('input[data-k="give"]', '37.5, 127.0'); await page.press('input[data-k="give"]', 'Enter');
 if (!/\(37°30\.000'N 127°00\.000'E\)/.test(await page.inputValue('input[data-k="give"]'))) fail('좌표 직접 입력: ' + await page.inputValue('input[data-k="give"]'));
 await page.reload(); await page.waitForSelector('#map-off:not([hidden])'); await page.click('#sheet-tab-4');
-if ((await page.inputValue('#br-unit')) !== '부산1호') fail('호출부호 기억');
+if ((await page.inputValue('#br-unit')) !== '' || (await page.inputValue('#br-region')) !== '') fail('새로고침하면 초기화되어야 함');
 await page.click('#sheet-tab-1'); if (!(await page.isVisible('#run'))) fail('①에서 판단 실행 보여야 함');
 console.log('PASS brief'); await browser.close(); srv.kill();
