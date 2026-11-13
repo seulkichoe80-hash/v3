@@ -24,12 +24,28 @@ function utc(yymmddhhmm) {
 }
 const dms = (d, m, s, h) => (d + m / 60 + s / 3600) * (h === 'S' || h === 'W' ? -1 : 1);
 
+// "BUFFER ZONE … TO 10NM" 해석. 완충구역이 금지구역 바깥 경계에서 바깥으로 N NM(폭)인지, 중심에서 N NM까지인지를
+// Q선 반경(영향 범위 전체)과 비교해 판단한다. 어느 쪽도 맞지 않으면 더 넓은 쪽(보수적)을 쓰고 uncertain으로 표시한다.
+export function parseBuffer(text, rNm, qRadiusNm) {
+  const flat = String(text || '').replace(/\s+/g, ' ');
+  const m = /BUFFER\s*ZONE[\s\S]*?\bTO\s+([\d.]+)\s*NM/i.exec(flat);
+  if (!m) return null;
+  const b = +m[1];
+  if (!(b > 0)) return null;
+  const range = /\bFM\s+([\d.]+)\s*NM\s+TO\s+[\d.]+\s*NM/i.test(flat);          // "FM 3NM TO 10NM"은 중심에서의 구간
+  const near = (a, c) => a !== null && Math.abs(a - c) <= 1;
+  if (range) return { widthNm: Math.max(0, b - rNm), outerNm: b, basis: '중심에서 거리(원문 구간 표기)', uncertain: false };
+  if (near(qRadiusNm, rNm + b)) return { widthNm: b, outerNm: rNm + b, basis: `금지구역 바깥으로 ${b}NM (Q선 반경 ${qRadiusNm}NM과 일치)`, uncertain: false };
+  if (b > rNm && near(qRadiusNm, b)) return { widthNm: b - rNm, outerNm: b, basis: `중심에서 ${b}NM (Q선 반경 ${qRadiusNm}NM과 일치)`, uncertain: false };
+  return { widthNm: b, outerNm: rNm + b, basis: `금지구역 바깥으로 ${b}NM (해석 불확실 — 넓은 쪽 적용)`, uncertain: true };
+}
+
 export function parseNotam(raw) {
   const t = String(raw || '').replace(/\r/g, '');
   const flat = t.replace(/\s+/g, ' ');
   const n = { id: null, series: null, kind: null, qcode: null, qcodeText: null, center: null, radiusNm: null,
     geomSource: null, start: null, end: null, endPerm: false, endEst: false, lower: '', upper: '', text: '',
-    needsPermission: false, phones: [], parseError: null, raw: t };
+    needsPermission: false, phones: [], prohibited: false, buffer: null, exceptions: [], parseError: null, raw: t };
   const head = /([A-Z])(\d{4}\/\d{2})\s+NOTAM\s?([NRC])/.exec(flat);
   if (!head) { n.parseError = 'NOTAM 번호를 찾을 수 없음'; return n; }
   n.id = head[1] + head[2]; n.series = head[1]; n.kind = head[3];
@@ -57,7 +73,10 @@ export function parseNotam(raw) {
   n.lower = f ? f[1] : (q ? (q[2] === '000' ? 'SFC' : 'FL' + q[2]) : '');
   n.upper = g ? g[1] : (q ? 'FL' + q[3] : '');
 
-  n.needsPermission = /FIRE\s*FIGHTING|EMERG|PRIOR\s+PERMISSION|\bPPR\b/i.test(n.text);
+  n.prohibited = /PROHIBITED/i.test(n.text) || n.qcode === 'QRPCA';
+  n.buffer = n.center && n.radiusNm ? parseBuffer(n.text, n.radiusNm, q ? +q[10] : null) : null;
+  n.exceptions = [...t.matchAll(/^[ \t]*-?[ \t]*(EXC\b[^\n]*)$/gim)].map((m) => m[1].trim());
+  n.needsPermission = /FIRE\s*FIGHTING|EMERG|PRIOR\s+PERMISSION|\bPPR\b|PRE-?COORDINATION|\bAPV\b/i.test(n.text);
   n.phones = [...new Set(n.text.match(/\d{2,3}-\d{3,4}-\d{4}/g) || [])];
   if (!n.center) n.parseError = 'NOTAM 구역 좌표 해석 불가';
   return n;
@@ -74,13 +93,14 @@ export function assessNotamRoute(n, route, departUtc, arriveUtc, nearNm = 5) {
     out.activeDuringFlight = n.start <= arriveUtc && endOk;
   }
   if (n.center) {
-    out.distanceNm = pointToRouteKm(n.center, route) / KM_PER_NM - (n.radiusNm || 0);
-    out.relation = out.distanceNm <= 0 ? 'CROSS' : out.distanceNm <= nearNm ? 'NEAR' : 'CLEAR';
+    const dC = pointToRouteKm(n.center, route) / KM_PER_NM, r = n.radiusNm || 0, outer = n.buffer ? n.buffer.outerNm : r;
+    out.distanceNm = dC - outer;                                  // 가장 바깥 경계(완충구역이 있으면 완충구역 바깥)까지의 거리
+    out.relation = dC <= r ? 'CROSS' : n.buffer && dC <= outer ? 'BUFFER' : out.distanceNm <= nearNm ? 'NEAR' : 'CLEAR';
   }
   if (!n.id) out.grade = 'NA';
   else if (!out.inScope) out.grade = 'GREEN';
   else if (!n.center) out.grade = 'NA';
-  else if ((out.relation === 'CROSS' || out.relation === 'NEAR') && out.activeDuringFlight !== false) out.grade = 'YELLOW';
+  else if ((out.relation === 'CROSS' || out.relation === 'BUFFER' || out.relation === 'NEAR') && out.activeDuringFlight !== false) out.grade = 'YELLOW';
   else out.grade = 'GREEN';
   return out;
 }

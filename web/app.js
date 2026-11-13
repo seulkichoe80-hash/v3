@@ -776,14 +776,16 @@ function render(r, ctx) {
 
   const inScope = r.notams.filter((n) => n.inScope).sort((a, b) => (a.distanceNm ?? 1e9) - (b.distanceNm ?? 1e9));
   const out = r.notams.length - inScope.length;
-  const rel = (n) => (n.relation === 'CROSS' ? '경로 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : n.relation === 'CLEAR' ? `경로에서 ${n.distanceNm.toFixed(1)}NM` : '위치 해석 불가');
+  const rel = (n) => (n.relation === 'CROSS' ? (n.prohibited ? '비행금지구역 통과' : '경로 통과') : n.relation === 'BUFFER' ? '완충구역 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : n.relation === 'CLEAR' ? `경로에서 ${n.distanceNm.toFixed(1)}NM` : '위치 해석 불가');
   // 경로상에 해당하는 NOTAM(통과·근접, 위치를 읽지 못한 것 포함)만 안내하고, 경로와 무관한 것은 접어 둔다
   const card = (n) => `<div class="n ${n.grade}">
       <b>${esc(n.id || '해석 불가')}</b> ${esc(n.qcodeText || '')} · ${esc(rel(n))}
       · ${n.activeDuringFlight === null ? '발효기간 해석 불가' : n.activeDuringFlight ? '<b>비행 시간대 발효</b>' : '비행 시간대 미발효'}
       <div>${esc(kstStr(n.start, true))} ~ ${n.endPerm ? 'PERM' : esc(kstStr(n.end, true))}${n.endEst ? ' (EST)' : ''} KST · ${esc(n.lower)}~${esc(n.upper)}
       ${n.geomSource === 'Q' ? ' · Q-line 기준(근사)' : ''}</div>
-      ${n.center ? `<div class="ncoord">📍 ${esc(formatCoord(n.center, fmtNow()))} · 반경 ${esc(fmtNm(n.radiusNm))}</div>` : ''}
+      ${n.center ? `<div class="ncoord">📍 ${esc(formatCoord(n.center, fmtNow()))} · ${n.prohibited ? '금지 ' : ''}반경 ${esc(fmtNm(n.radiusNm))}</div>` : ''}
+      ${n.buffer ? `<div class="nbuf">┄ 완충구역: 금지구역 바깥으로 +${esc(n.buffer.widthNm)}NM (중심에서 ${esc(n.buffer.outerNm)}NM)<br><small>${esc(n.buffer.basis)}</small></div>` : ''}
+      ${(n.exceptions || []).length ? `<div class="nexc">예외(원문): ${n.exceptions.map(esc).join(' / ')}</div>` : ''}
       ${n.needsPermission ? `<div class="perm">⚠ 소방헬기 사전허가 필요${n.phones.length ? ': ' + esc(n.phones.join(', ')) : ''}</div>` : ''}
       <details><summary>원문</summary><pre>${esc(n.raw)}</pre></details></div>`;
   const onRoute = inScope.filter((n) => n.relation !== 'CLEAR'), offRoute = inScope.filter((n) => n.relation === 'CLEAR');
@@ -1038,9 +1040,9 @@ function drawAerial(result, pts) {
   const list = result ? result.notams.filter((n) => n.inScope && n.center) : currentNotams();
   list.forEach((n) => {
     const off = n.relation === 'CLEAR' || n.activeDuringFlight === false;
-    L.circle([n.center.lat, n.center.lon], { radius: (n.radiusNm + bufferNm()) * 1852, color: '#ffb300', weight: 2, dashArray: '4 6', opacity: off ? 0.5 : 0.95, fillColor: '#ffb300', fillOpacity: 0.05 }).addTo(g);
+    L.circle([n.center.lat, n.center.lon], { radius: ringNm(n) * 1852, color: '#ffb300', weight: 2, dashArray: '4 6', opacity: off ? 0.5 : 0.95, fillColor: '#ffb300', fillOpacity: 0.05 }).addTo(g);
     L.circle([n.center.lat, n.center.lon], { radius: n.radiusNm * 1852, color: '#ff2d20', weight: 3, dashArray: off ? '8 6' : null, opacity: off ? 0.7 : 1, fillColor: '#ff2d20', fillOpacity: off ? 0.08 : 0.2 }).addTo(g);
-    L.tooltip({ permanent: true, direction: 'top', className: 'nt-tip', opacity: 1 }).setContent(`${esc(n.id || 'NOTAM')}<br>반경 ${esc(fmtNm(n.radiusNm))}<br>${esc(notamPeriod(n))}`).setLatLng([n.center.lat, n.center.lon]).addTo(g);
+    L.tooltip({ permanent: true, direction: 'top', className: 'nt-tip', opacity: 1 }).setContent(`${esc(n.id || 'NOTAM')}<br>${n.prohibited ? '금지 ' : ''}반경 ${esc(fmtNm(n.radiusNm))}${n.buffer ? `<br>완충 +${esc(n.buffer.widthNm)}NM (${esc(n.buffer.outerNm)}NM)` : ''}<br>${esc(notamPeriod(n))}`).setLatLng([n.center.lat, n.center.lon]).addTo(g);
   });
   if (pts && pts.length >= 2) {
     const ll = pts.map((p) => [p.lat, p.lon]);
@@ -1109,15 +1111,16 @@ function currentNotams() {
   return splitNotams(notamText()).map(parseNotam).filter((n) => n.id && n.series === 'D' && n.center);
 }
 const bufferNm = () => ((state.config && state.config.radius && state.config.radius.notamNearNm) ?? 5);
+const ringNm = (n) => (n.buffer ? n.buffer.outerNm : n.radiusNm + bufferNm());   // NOTAM이 완충구역을 정하면 그 외곽, 아니면 시스템 근접 경고권
 const far0 = (n) => n.relation === 'CLEAR' || n.activeDuringFlight === false;
 function notamLayer(list, bounds, extend) {
   const k = state.kakao, ll = (p) => new k.LatLng(p.lat, p.lon);
   list.forEach((n, idx) => {
     const far = n.relation === 'CLEAR';                 // 판단 실행 결과 경로와 무관한 NOTAM은 점선·옅게
     const off = n.activeDuringFlight === false || far;  // 비행 시간대 미발효로 확인된 NOTAM도 점선·옅게
-    add(new k.Circle({ center: ll(n.center), radius: (n.radiusNm + bufferNm()) * 1852, strokeWeight: 2, strokeColor: '#ff8f00', strokeOpacity: far0(n) ? 0.45 : 0.9, strokeStyle: 'shortdash', fillColor: '#ff8f00', fillOpacity: 0.04 }));   // 근접 경고권(버퍼존): 판정에서 "근접"으로 보는 거리
+    add(new k.Circle({ center: ll(n.center), radius: ringNm(n) * 1852, strokeWeight: 2, strokeColor: '#ff8f00', strokeOpacity: far0(n) ? 0.45 : 0.9, strokeStyle: 'shortdash', fillColor: '#ff8f00', fillOpacity: 0.04 }));   // 근접 경고권(버퍼존): 판정에서 "근접"으로 보는 거리
     add(new k.Circle({ center: ll(n.center), radius: n.radiusNm * 1852, strokeWeight: 3, strokeColor: '#d6201a', strokeOpacity: off ? 0.55 : 1, strokeStyle: off ? 'dash' : 'solid', fillColor: '#d6201a', fillOpacity: off ? 0.06 : 0.18 }));
-    add(new k.CustomOverlay({ position: ll(n.center), xAnchor: [0.5, -0.12, 1.12][idx % 3], yAnchor: [1.2, 0.5, 0.5][idx % 3], zIndex: 10 + idx, content: `<div class="nt-label${off ? ' off' : ''}${list.length > 3 ? ' compact' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>반경 ${fmtNm(n.radiusNm)}${far ? ' · 경로 무관' : off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
+    add(new k.CustomOverlay({ position: ll(n.center), xAnchor: [0.5, -0.12, 1.12][idx % 3], yAnchor: [1.2, 0.5, 0.5][idx % 3], zIndex: 10 + idx, content: `<div class="nt-label${off ? ' off' : ''}${list.length > 3 ? ' compact' : ''}">${esc(n.id || 'NOTAM')}<br>${esc(formatCoord(n.center, fmtNow()))}<br>${n.prohibited ? '금지 ' : ''}반경 ${fmtNm(n.radiusNm)}${n.buffer ? `<br>완충 +${n.buffer.widthNm}NM (${n.buffer.outerNm}NM)` : ''}${far ? ' · 경로 무관' : off ? ' · 미발효' : ''}<br>${esc(notamPeriod(n))}</div>` }));
     if (extend && bounds) bounds.extend(ll(n.center));
   });
 }

@@ -38,6 +38,12 @@ await page.waitForTimeout(600);
 let pre = await page.evaluate(() => window.__kk.map((x) => ({ name: x.name, c: x.o.strokeColor, html: x.o.content })));
 if (!pre.some((x) => x.name === 'Circle' && x.c === '#d6201a')) fail('판단 실행 전에 NOTAM 원이 안 그려짐');
 if (!pre.some((x) => /nt-label/.test(x.html || '') && /D2840\/26/.test(x.html))) fail('판단 실행 전 NOTAM 라벨 없음');
+// 완충구역(BUFFER ZONE)이 있는 NOTAM(D3559/26): 금지 3NM 원 + 완충 외곽 13NM 원(금지구역 바깥으로 10NM), 라벨에 완충 표시
+if (!(await page.isVisible('#notam-2'))) await page.click('#notam-2-sum');
+await page.fill('#notam-2', readFileSync(ROOT + 'tests/fixtures/notam_d3559.txt', 'utf8')); await page.waitForTimeout(700);
+const rr = await page.evaluate(() => window.__kk.filter((x) => x.name === 'Circle').map((x) => Math.round(x.o.radius)));
+if (!rr.includes(3 * 1852) || !rr.includes(13 * 1852)) fail('D3559 금지 3NM·완충 13NM 원이 없음: ' + JSON.stringify(rr));
+if (!(await page.evaluate(() => window.__kk.some((x) => x.name === 'CustomOverlay' && /완충 \+10NM \(13NM\)/.test(x.o.content || ''))))) fail('완충구역 라벨이 없음');
 // 비행금지·제한구역(R-75·P-73·P-518W·P-518·P-518E)도 판단 실행 전에 항상 그려진다
 const polys = await page.evaluate(() => window.__kk.filter((x) => x.name === 'Polygon' && (x.o.strokeColor === '#8e24aa' || x.o.strokeColor === '#e67e00')).length);
 if (polys < 5) fail('비행금지구역 다각형이 그려지지 않음: ' + polys);

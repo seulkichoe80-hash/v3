@@ -389,3 +389,5 @@ details.faroff .n { opacity: .75; }
 .ms-row code { flex: 1; min-width: 0; font: 700 12.5px var(--mono, monospace); background: #eef3f8; padding: 2px 5px; border-radius: 4px; white-space: nowrap; overflow-x: auto; }
 .ms-row .cp { flex: 0 0 auto; padding: 2px 8px; }
 .legend .bz { color: #e68a00; font-weight: 700; }
+.notam-list .nbuf { color: #9a5300; font-weight: 700; margin-top: 2px; } .notam-list .nbuf small { font-weight: 400; color: #7a6a50; }
+.notam-list .nexc { font-size: 12px; color: #444; margin-top: 3px; background: #fff8e1; border-radius: 4px; padding: 2px 6px; }

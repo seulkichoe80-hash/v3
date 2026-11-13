@@ -254,9 +254,13 @@ export function evaluate(input) {
   if (!notamsProvided) rows.push({ segment: '경로', item: 'NOTAM', value: '미입력', limit: '경로 관련 없음', grade: 'NA', source: 'xNotam', obsTime: null, note: 'xNotam 조회 후 붙여넣기' });
   else if (!relevant.length) rows.push({ segment: '경로', item: 'NOTAM', value: `경로 관련 D NOTAM 없음 (입력 ${assessed.length}건)`, limit: '경로 관련 없음', grade: 'GREEN', source: 'xNotam', obsTime: null, note: '' });
   for (const n of relevant) {
-    const rel = n.relation === 'CROSS' ? '경로 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : '위치 해석 불가';
-    rows.push({ segment: '경로', item: 'NOTAM', value: `${n.id || '해석 불가'} ${n.qcodeText || ''} ${rel}`.trim(), limit: '경로 관련 없음', grade: n.grade, source: 'xNotam', obsTime: null,
-      note: n.needsPermission ? `소방헬기 사전허가 필요${n.phones.length ? ' ' + n.phones.join(', ') : ''}` : (n.parseError ? n.parseError + ' — 원문 확인' : '') });
+    const rel = n.relation === 'CROSS' ? (n.prohibited ? '비행금지구역 통과' : '경로 통과') : n.relation === 'BUFFER' ? '완충구역 통과' : n.relation === 'NEAR' ? `경로 ${n.distanceNm.toFixed(1)}NM 근접` : '위치 해석 불가';
+    const tel = n.phones.length ? ' ' + n.phones.join(', ') : '';
+    const note = n.parseError ? n.parseError + ' — 원문 확인'
+      : n.relation === 'CROSS' && n.prohibited ? `비행금지구역 내부 — 진입 불가(원문 예외 확인)${n.needsPermission ? ' · 사전조율·승인' + tel : ''}`
+      : n.relation === 'BUFFER' ? `완충구역(금지구역 바깥 ${n.buffer.widthNm}NM) 통과 — 사전조율·승인 필요${tel}`
+      : n.needsPermission ? `소방헬기 사전허가 필요${tel}` : '';
+    rows.push({ segment: '경로', item: 'NOTAM', value: `${n.id || '해석 불가'} ${n.qcodeText || ''} ${rel}`.trim(), limit: '경로 관련 없음', grade: n.grade, source: 'xNotam', obsTime: null, note });
   }
 
   const wind = pts.map((p, i) => windInfo(segName(i), p, data.aws || [], metars, now, config));
