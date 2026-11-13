@@ -49,7 +49,8 @@ const alongRoute = (items, route, maxKm) => items.filter((it) => has(it) && poin
 const hasCeilInfo = (o) => (o.ceilUnknown ? false : o.icao ? o.visM !== null && o.visM !== undefined : (o.cloudTenths !== null && o.cloudTenths !== undefined) || (o.midTenths !== null && o.midTenths !== undefined));
 const srcName = (o) => (o.icao ? `METAR ${o.name}(${o.icao})` : `ASOS ${o.name}(${o.stn})`);
 
-function obsRows(segment, obs, limits, input) {
+function obsRows(segment, obs, limits, input, at = null) {
+  const src = (o) => srcName(o) + (at && has(o) ? ` · ${Math.round(distanceKm(at, o))}km 거리` : '');   // 지점 행에는 관측소까지 거리 표시
   const { config, now } = input;
   const f = config.limits.cautionFactor;
   const mk = (item, extra) => ({ segment, item, value: '-', limit: item === '시정' ? `${limits.visM}m` : `${limits.ceilFt}ft`, source: '-', obsTime: null, ...extra });
@@ -58,26 +59,26 @@ function obsRows(segment, obs, limits, input) {
   }
   const fresh = obs.filter((o) => ageMin(o.obsTime, now) <= config.freshnessMin[o.icao ? 'metar' : 'asos']);
   if (!fresh.length) {
-    return ['시정', '운고'].map((it) => mk(it, { grade: 'NA', note: '자료 오래됨 — 직접 확인', source: srcName(obs[0]), obsTime: obs[0].obsTime }));
+    return ['시정', '운고'].map((it) => mk(it, { grade: 'NA', note: '자료 오래됨 — 직접 확인', source: src(obs[0]), obsTime: obs[0].obsTime }));
   }
   const rows = [];
   const vis = fresh.filter((o) => o.visM !== null && o.visM !== undefined);
-  if (!vis.length) rows.push(mk('시정', { grade: 'NA', note: '시정 결측 — 직접 확인', source: srcName(fresh[0]) }));
+  if (!vis.length) rows.push(mk('시정', { grade: 'NA', note: '시정 결측 — 직접 확인', source: src(fresh[0]) }));
   else {
     const w = vis.reduce((a, b) => (b.visM < a.visM ? b : a));
-    rows.push(mk('시정', { value: `${w.visM}m`, grade: gradeValue(w.visM, limits.visM, f), source: srcName(w), obsTime: w.obsTime, note: '' }));
+    rows.push(mk('시정', { value: `${w.visM}m`, grade: gradeValue(w.visM, limits.visM, f), source: src(w), obsTime: w.obsTime, note: '' }));
   }
   const ci = fresh.filter(hasCeilInfo);
   const withCeil = ci.filter((o) => o.ceilFt !== null && o.ceilFt !== undefined);
-  if (!ci.length) rows.push(mk('운고', { grade: 'NA', note: '운고 결측 — 직접 확인', source: srcName(fresh[0]) }));
-  else if (!withCeil.length) rows.push(mk('운고', { value: '운고 없음(구름 적음)', grade: 'GREEN', source: srcName(ci[0]), obsTime: ci[0].obsTime, note: '' }));
+  if (!ci.length) rows.push(mk('운고', { grade: 'NA', note: '운고 결측 — 직접 확인', source: src(fresh[0]) }));
+  else if (!withCeil.length) rows.push(mk('운고', { value: '운고 없음(구름 적음)', grade: 'GREEN', source: src(ci[0]), obsTime: ci[0].obsTime, note: '' }));
   else {
     const w = withCeil.reduce((a, b) => (b.ceilFt < a.ceilFt ? b : a));
     // ASOS는 전운량·중하층운량을 함께 보여 줘서 운고 산정 근거(상층운 포함 여부)를 확인할 수 있게 한다
     const has = (v) => v !== null && v !== undefined;
     const cloudNote = w.stn !== undefined && (has(w.cloudTenths) || has(w.midTenths))
       ? `ASOS ${has(w.cloudTenths) ? `전운량 ${w.cloudTenths}/10` : ''}${has(w.cloudTenths) && has(w.midTenths) ? ' · ' : ''}${has(w.midTenths) ? `중하층 ${w.midTenths}/10` : ''}` : '';
-    rows.push(mk('운고', { value: `${w.ceilFt}ft`, grade: gradeValue(w.ceilFt, limits.ceilFt, f), source: srcName(w), obsTime: w.obsTime, note: cloudNote }));
+    rows.push(mk('운고', { value: `${w.ceilFt}ft`, grade: gradeValue(w.ceilFt, limits.ceilFt, f), source: src(w), obsTime: w.obsTime, note: cloudNote }));
   }
   return rows;
 }
@@ -236,7 +237,7 @@ export function evaluate(input) {
 
   const pick = (p) => [nearest(metars, p, metarKm), nearest(asoss, p, asosKm)].filter(Boolean);
   const routeObs = [...alongRoute(metars, pts, metarKm), ...alongRoute(asoss, pts, asosKm)];
-  const pointRows = (i) => obsRows(segName(i), pick(pts[i]), limits, input);
+  const pointRows = (i) => obsRows(segName(i), pick(pts[i]), limits, input, pts[i]);
   const rows = [
     ...pointRows(0),
     ...obsRows('경로', routeObs, limits, input),
@@ -322,5 +323,6 @@ function buildReport(r, input) {
   if (w && w.windMs !== null) parts.push(`바람(목적지) ${dirText(w.windDir)} ${w.windMs}m/s(${w.windKt}kt)${w.gustMs ? ' 순간 ' + w.gustMs + 'm/s(' + w.gustKt + 'kt)' : ''}${w.trend ? ' ' + w.trend : ''}`);
   if (isNight) parts.push('제22조① 야간 조건 확인(착륙장 조명, 수색구조 시 야간투시경 등)');
   if (isSea) parts.push('제22조④ 해상 조건 확인(구명조끼·체온보호슈트·해상생환교육 등)');
+  parts.push('※ 조언용 참고자료이며 최종 판단은 통제관·기장');
   return parts.join(' | ');
 }

@@ -430,3 +430,4 @@ details.faroff .n { opacity: .75; }
 .opsbox > b { font-size: 18px; color: #8a5a00; } .opsbox[data-grade="NA"] > b { color: #44515f; }
 .opsbox ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; } .opsbox li { margin: 3px 0; }
 .opsbox .note { font-size: 13px; color: #444; }
+.br-privacy { margin: 6px 0 2px; padding: 6px 10px; font-size: 12.5px; color: #7a4b00; background: #fff8e1; border-radius: 6px; }
