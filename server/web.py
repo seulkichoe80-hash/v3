@@ -54,6 +54,32 @@ def _same_origin(headers):
     return urlparse(origin).netloc == host.split(',')[0].strip()
 
 
+# 단순 호출 제한(IP당 1분). 서버리스는 인스턴스마다 따로 세므로 완전하지 않아도 폭주·남용을 줄이는 용도. client_ip가 비면(로컬 실행) 적용하지 않음.
+RATE_WINDOW = 60
+RATE_MAX = 240          # 일반 /api 호출
+RATE_MAX_DRIVE = 40     # 외부 키(카카오 길찾기)를 쓰는 호출
+_RATE = {}
+
+
+def _rate_limited(ip, path, now=None):
+    import time
+    if not ip:
+        return 0
+    now = time.time() if now is None else now
+    if len(_RATE) > 5000:
+        for k in [k for k, v in _RATE.items() if not v or v[-1] < now - RATE_WINDOW]:
+            _RATE.pop(k, None)
+    cap = RATE_MAX_DRIVE if path == '/api/drive' else RATE_MAX
+    key = (ip, 'drive' if path == '/api/drive' else 'all')
+    hits = [t for t in _RATE.get(key, []) if t > now - RATE_WINDOW]
+    if len(hits) >= cap:
+        _RATE[key] = hits
+        return max(1, int(hits[0] + RATE_WINDOW - now) + 1)
+    hits.append(now)
+    _RATE[key] = hits
+    return 0
+
+
 def handle_api(method, path, headers, body, *, client, config, kakao_js_key, access_code='', log_path=None, notam_store=None, client_ip='', kakao_rest_key='', vworld_key=''):
     """→ (status, headers, body bytes). access_code가 비어 있으면 접속코드 없이 개방."""
     from urllib.parse import parse_qs
@@ -63,6 +89,9 @@ def handle_api(method, path, headers, body, *, client, config, kakao_js_key, acc
         return _json(200, {'kakaoJsKey': kakao_js_key, 'config': config, 'needsCode': bool(access_code),
                            'serverLog': bool(log_path), 'notamShared': notam_store is not None, 'usageShared': notam_store is not None, 'driveKakao': bool(kakao_rest_key), 'vworldKey': vworld_key,
                            'version': (os.environ.get('VERCEL_GIT_COMMIT_SHA') or 'local')[:7]})
+    wait = _rate_limited(client_ip, path)
+    if wait:
+        return _json(429, {'error': f'요청이 너무 많습니다. {wait}초 뒤에 다시 시도하세요'}, extra={'Retry-After': str(wait)})
     if method not in ('GET', 'HEAD') and not _same_origin(headers):
         return _json(403, {'error': '허용되지 않은 출처의 요청입니다'})
     if access_code:
