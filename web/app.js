@@ -262,7 +262,7 @@ function searchBox(q, list, onPick) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const c = parseCoord(q.value, fmtNow());                       // 좌표를 그대로 입력한 경우
-    if (!c.error && Number.isFinite(c.lat)) { onPick({ name: q.value.trim(), lat: c.lat, lon: c.lon }); list.innerHTML = ''; return; }
+    if (!c.error && Number.isFinite(c.lat)) { onPick({ name: q.value.trim(), lat: c.lat, lon: c.lon, typed: true }); list.innerHTML = ''; return; }
     const first = list.querySelector('li[data-f], li[data-i]');
     if (first) first.click();
     else { clearTimeout(t); q.dispatchEvent(new Event('input')); setTimeout(() => list.querySelector('li[data-f], li[data-i]')?.click(), 900); }
@@ -1214,19 +1214,21 @@ function setupBrief() {
       if (f.type === 'place') {
         const ul = $('br-fields').querySelector(`ul[data-r="${f.k}"]`);
         const put = (pl) => { inp.value = composeLoc(pl, $('br-fmt').value); br.values[f.k] = inp.value; br.places[f.k] = pl; br.custom = false; refresh(); };
-        searchBox(inp, ul, put);
+        // 좌표만 알 때는 카카오로 주소를 찾아 "주소(좌표)"로 만든다(못 찾으면 좌표만)
+        const withAddr = (lat, lon) => {
+          const done = (addr) => put({ name: addr ? '' : '지정 좌표', addr, lat, lon });
+          if (!(state.geocoder && state.kakao)) return done('');
+          let fin = false; const t = setTimeout(() => { if (!fin) { fin = true; done(''); } }, 3000);
+          try { state.geocoder.coord2Address(lon, lat, (res, st) => { if (fin) return; fin = true; clearTimeout(t); done(st === state.kakao.services.Status.OK && res[0] ? (res[0].road_address || res[0].address).address_name : ''); }); } catch { fin = true; clearTimeout(t); done(''); }
+        };
+        searchBox(inp, ul, (pl) => (pl.typed ? withAddr(pl.lat, pl.lon) : put(pl)));
         const ci = $('br-fields').querySelector(`input[data-ck="${f.k}"]`);   // 좌표를 직접 입력하면 주소를 찾아 "주소(좌표)"로
         const fromCoord = () => {
-          const txt = ci.value.trim(); if (!txt) return;
+          const txt = ci.value.trim(); if (!txt) { ci.classList.remove('bad'); return; }
           let c = parseCoord(txt, $('br-fmt').value);
           if (c.error) for (const m of ['dd', 'ddm', 'dms']) { c = parseCoord(txt, m); if (!c.error) break; }
           ci.classList.toggle('bad', !!c.error);
-          if (c.error || !Number.isFinite(c.lat)) return;
-          const done = (addr) => put({ name: addr ? '' : '지정 좌표', addr, lat: c.lat, lon: c.lon });
-          if (state.geocoder && state.kakao) {
-            let fin = false; const t = setTimeout(() => { if (!fin) { fin = true; done(''); } }, 3000);
-            try { state.geocoder.coord2Address(c.lon, c.lat, (res, st) => { if (fin) return; fin = true; clearTimeout(t); done(st === state.kakao.services.Status.OK && res[0] ? (res[0].road_address || res[0].address).address_name : ''); }); } catch { fin = true; clearTimeout(t); done(''); }
-          } else done('');
+          if (!c.error && Number.isFinite(c.lat)) withAddr(c.lat, c.lon);
         };
         ci.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); fromCoord(); } });
         ci.addEventListener('change', fromCoord);

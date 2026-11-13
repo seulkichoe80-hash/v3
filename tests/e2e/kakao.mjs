@@ -81,6 +81,12 @@ await page.click('#ms-close');
 // 브이월드 키가 없으면 지도 종류 버튼 전체를 숨기고(일반 지도만), 위성(스카이뷰) 버튼은 없다
 if (await page.isVisible('#maptype')) fail('키가 없는데 지도 종류 버튼이 보임');
 if (await page.locator('#mt-sky').count()) fail('위성 버튼은 삭제되어야 함');
+// ④ 임무브리핑: 좌표를 입력하면(좌표칸·검색칸 모두) 주소를 받아와 "주소(좌표)"로
+await page.click('#sheet-tab-4'); await page.click('#br-types .chip[data-t="산불"]');
+await page.fill('input[data-ck="place"]', '37.27945, 127.04754'); await page.press('input[data-ck="place"]', 'Enter');
+await page.waitForFunction(() => /^테스트 주소\(/.test(document.querySelector('input[data-k="place"]').value), null, { timeout: 3000 }).catch(async () => fail('좌표칸 → 주소 조회: ' + await page.inputValue('input[data-k="place"]')));
+await page.fill('input[data-k="water"]', '37.3, 127.1'); await page.press('input[data-k="water"]', 'Enter');
+await page.waitForFunction(() => /^테스트 주소\(/.test(document.querySelector('input[data-k="water"]').value), null, { timeout: 3000 }).catch(async () => fail('검색칸 좌표 → 주소 조회: ' + await page.inputValue('input[data-k="water"]')));
 if (errors.length) fail('페이지 오류: ' + errors.join(' / '));
 console.log('PASS kakao');
 await browser.close(); srv.kill();
