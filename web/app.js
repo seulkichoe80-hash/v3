@@ -6,7 +6,7 @@ import { AREAS, AIRAC_NOTE } from './airspace.js';
 import { parseCoord, formatCoord, COORD_PLACEHOLDER } from './coords.js';
 import { splitNotams, parseNotam } from './notam.js';
 import { evaluate, GRADE_TEXT, dirText, SIGWX_TEXT } from './judge.js';
-import { TEMPLATES, ETC_CHECKS, composeLoc, buildBrief } from './brief.js';
+import { TEMPLATES, ETC_CHECKS, CATS, titleOf, parseReq, parseTime, composeLoc, buildBrief } from './brief.js';
 import { criteriaTable, art22Items } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1174,43 +1174,54 @@ init().catch((e) => { $('run-msg').textContent = '초기화 실패: ' + e.messag
 const BR_KEY = 'heliwx.brief';
 function setupBrief() {
   const saved = store.get(BR_KEY, {});
-  const br = { tpl: TEMPLATES.find((t) => t.id === saved.tpl) || TEMPLATES[0], values: {}, etc: new Set(), custom: false };
+  const find = (kind) => { for (const [ci, c] of CATS.entries()) for (const [n, id] of c.items) if (n === kind) return { ci, kind: n, tpl: TEMPLATES.find((t) => t.id === id) }; return null; };
+  const br = { ...(find(saved.kind) || find('산불')), values: {}, etc: new Set(), etcText: '', custom: false, places: {} };
   $('br-unit').value = saved.unit || '';
   $('br-fmt').value = ['dd', 'ddm', 'dms'].includes(saved.fmt) ? saved.fmt : (fmtNow() || 'dd');
-  const save = () => store.set(BR_KEY, { tpl: br.tpl.id, unit: $('br-unit').value, fmt: $('br-fmt').value });
+  const save = () => store.set(BR_KEY, { kind: br.kind, unit: $('br-unit').value, fmt: $('br-fmt').value });
+  const title = () => titleOf($('br-region').value, br.kind);
   const refresh = () => {                                     // 전송문을 다시 만든다(직접 고친 뒤에는 덮어쓰지 않음)
+    $('br-title-show').textContent = title();
     if (br.custom) return;
-    $('br-out').value = buildBrief({ tpl: br.tpl, unit: $('br-unit').value, title: $('br-title').value, values: br.values, etcChecks: [...br.etc], etcText: br.etcText || '' });
+    $('br-out').value = buildBrief({ tpl: br.tpl, unit: $('br-unit').value, title: title(), values: br.values, etcChecks: [...br.etc], etcText: br.etcText });
+  };
+  const drawTypes = () => {
+    $('br-cats').innerHTML = CATS.map((c, i) => `<button type="button" class="chip${i === br.ci ? ' on' : ''}" data-c="${i}" aria-expanded="${i === br.ci}">${esc(c.name)} ${i === br.ci ? '▾' : '▸'}</button>`).join('');
+    $('br-types').innerHTML = CATS[br.ci].items.map(([n]) => `<button type="button" class="chip${n === br.kind ? ' on' : ''}" data-t="${esc(n)}">${esc(n)}</button>`).join('');
   };
   const build = () => {
-    $('br-types').innerHTML = TEMPLATES.map((t) => `<button type="button" class="chip${t.id === br.tpl.id ? ' on' : ''}" data-t="${t.id}">${esc(t.name)}</button>`).join('');
-    $('br-title').value = br.tpl.title; br.values = {}; br.etc = new Set(); br.etcText = ''; br.custom = false;
+    drawTypes(); br.values = {}; br.etc = new Set(); br.etcText = ''; br.custom = false; br.places = {};
     $('br-fields').innerHTML = br.tpl.fields.map((f) => `<div class="br-row"><label>${esc(f.label)}</label><div class="br-in">`
       + `<input type="text" data-k="${f.k}" placeholder="${esc(f.type === 'place' ? '장소·주소 검색 → 좌표 자동 입력' : f.ph)}" autocomplete="off">`
       + (f.type === 'place' ? `<ul class="results" data-r="${f.k}"></ul>` : '') + '</div></div>').join('');
-    $('br-etc').innerHTML = '<b>기타</b> ' + ETC_CHECKS.map((c, i) => `<label class="inline"><input type="checkbox" data-etc="${esc(c)}"> ${esc(c)}</label>`).join(' ')
+    $('br-etc').innerHTML = '<b>기타</b> ' + ETC_CHECKS.map((c) => `<label class="inline"><input type="checkbox" data-etc="${esc(c)}"> ${esc(c)}</label>`).join(' ')
       + ' <input type="text" id="br-etc-text" placeholder="직접 입력" autocomplete="off">';
     br.tpl.fields.forEach((f) => {
       const inp = $('br-fields').querySelector(`input[data-k="${f.k}"]`);
       inp.addEventListener('input', () => { br.values[f.k] = inp.value; br.custom = false; refresh(); });
+      if (f.type === 'req' || f.type === 'time') {              // "충북 1120" → "충북소방본부(11:20)"
+        const conv = () => { const v = f.type === 'req' ? parseReq(inp.value) : (parseTime(inp.value) || inp.value.trim()); if (v !== inp.value) { inp.value = v; br.values[f.k] = v; br.custom = false; refresh(); } };
+        inp.addEventListener('blur', conv); inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') conv(); });
+      }
       if (f.type === 'place') {
         const ul = $('br-fields').querySelector(`ul[data-r="${f.k}"]`);
-        searchBox(inp, ul, (pl) => { inp.value = composeLoc(pl, $('br-fmt').value); br.values[f.k] = inp.value; br.places = { ...(br.places || {}), [f.k]: pl }; br.custom = false; refresh(); });
+        searchBox(inp, ul, (pl) => { inp.value = composeLoc(pl, $('br-fmt').value); br.values[f.k] = inp.value; br.places[f.k] = pl; br.custom = false; refresh(); });
       }
     });
     $('br-etc').querySelectorAll('input[data-etc]').forEach((c) => c.addEventListener('change', () => { c.checked ? br.etc.add(c.dataset.etc) : br.etc.delete(c.dataset.etc); br.custom = false; refresh(); }));
     $('br-etc-text').addEventListener('input', (e) => { br.etcText = e.target.value; br.custom = false; refresh(); });
-    br.places = {}; refresh(); save();
+    refresh(); save();
   };
-  $('br-types').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; br.tpl = TEMPLATES.find((t) => t.id === b.dataset.t); build(); });
+  $('br-cats').addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (!b) return; br.ci = +b.dataset.c; drawTypes(); });
+  $('br-types').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; Object.assign(br, find(b.dataset.t)); build(); });
   $('br-unit').addEventListener('input', () => { br.custom = false; refresh(); save(); });
-  $('br-title').addEventListener('input', () => { br.custom = false; refresh(); });
+  $('br-region').addEventListener('input', () => { br.custom = false; refresh(); });
   $('br-fmt').addEventListener('change', () => {              // 좌표 형식을 바꾸면 이미 고른 장소의 좌표도 새 형식으로
-    for (const [k, pl] of Object.entries(br.places || {})) { const inp = $('br-fields').querySelector(`input[data-k="${k}"]`); if (inp) { inp.value = composeLoc(pl, $('br-fmt').value); br.values[k] = inp.value; } }
+    for (const [k, pl] of Object.entries(br.places)) { const inp = $('br-fields').querySelector(`input[data-k="${k}"]`); if (inp) { inp.value = composeLoc(pl, $('br-fmt').value); br.values[k] = inp.value; } }
     br.custom = false; refresh(); save();
   });
   $('br-out').addEventListener('input', () => { br.custom = true; });
   $('br-copy').addEventListener('click', async () => { await copyText($('br-out').value); $('br-msg').textContent = '복사했습니다 — 메신저에 붙여넣으세요'; setTimeout(() => { $('br-msg').textContent = ''; }, 3000); });
-  $('br-reset').addEventListener('click', build);
+  $('br-reset').addEventListener('click', () => { $('br-region').value = ''; build(); });
   build();
 }
