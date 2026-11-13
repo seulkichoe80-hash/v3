@@ -419,3 +419,6 @@ details.faroff .n { opacity: .75; }
 .br-etcrow b { width: 36px; font-size: 13px; }
 .br-etcrow label.inline { margin: 4px 0 0 0; }
 #br-etc-text { margin-top: 2px; }
+/* 항공사진(Leaflet) 확대·축소 버튼은 지도 종류 버튼 아래로 간격을 둔다 */
+#map2 .leaflet-top.leaflet-left { top: 48px; }
+@media (max-width: 760px) { #map2 .leaflet-top.leaflet-left { top: 96px; } }
