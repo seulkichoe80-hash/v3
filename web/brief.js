@@ -59,6 +59,9 @@ export const TEMPLATES = [
   ] },
 ];
 export const ETC_CHECKS = ['P-518', 'P-73', 'R-75', '비행장 PPR', '연료보급'];
+// 의료진 탑승 경로 바로 넣기: 병원 이름 → "- 경로 : 병원(의료진탑승)-목적지-병원"
+export const ROUTE_HOSPS = ['아주대', '의정부성모병원'];
+export const routeLine = (h) => `- 경로 : ${h}(의료진탑승)-목적지-${h}`;
 
 // 검색으로 고른 장소를 "주소 / 명칭(좌표)" 형태 한 줄로 만든다. 좌표 형식은 fmt(dd·ddm·dms).
 export function composeLoc(pl, fmt = 'dd') {
@@ -69,13 +72,14 @@ export function composeLoc(pl, fmt = 'dd') {
 }
 
 // 메신저로 보낼 브리핑 글. 값이 비어 있는 항목은 기본적으로 뺀다(includeBlank로 포함 가능).
-export function buildBrief({ tpl, unit = '', title = '', values = {}, etcChecks = [], etcText = '', resultLine = '', includeBlank = false }) {
+export function buildBrief({ tpl, unit = '', title = '', values = {}, etcChecks = [], etcText = '', routes = [], resultLine = '', includeBlank = false }) {
   const head = `[${unit.trim() || '00호'}] ${title.trim() || tpl.title}`;
   const lines = [head];
   for (const f of tpl.fields) {
     const v = String(values[f.k] || '').trim();
     if (v || includeBlank) lines.push(`- ${f.label} : ${v}`);
   }
+  for (const h of routes) lines.push(routeLine(h));
   const etc = [...etcChecks, String(etcText || '').trim()].filter(Boolean).join(', ');
   if (etc || includeBlank) lines.push(`- ${ETC} : ${etc}`);
   if (resultLine) lines.push(resultLine);
@@ -86,7 +90,7 @@ export function buildBrief({ tpl, unit = '', title = '', values = {}, etcChecks 
 export const CATS = [
   { name: '화재', items: [['산불', 'fire'], ['공장화재', 'fire2'], ['기타화재', 'fire2']] },
   { name: '구조', items: [['산악구조', 'mountain'], ['건물구조', 'mountain'], ['수난구조', 'mountain'], ['수색구조', 'mountain']] },
-  { name: '구급', items: [['환자이송', 'ems'], ['병원 간 전원', 'ems'], ['장기이송', 'organ']] },
+  { name: '구급', items: [['환자이송', 'ems'], ['병원 간 전원', 'ems'], ['Heli-Ems', 'ems'], ['장기이송', 'organ']] },
   { name: '기타', items: [['장비이송', 'support'], ['훈련비행', 'training'], ['정비이동', 'training']] },
 ];
 export const titleOf = (region, kind) => [String(region || '').trim(), kind].filter(Boolean).join(' ');

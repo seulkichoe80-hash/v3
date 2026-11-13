@@ -29,6 +29,8 @@ await page.selectOption('#br-fmt', 'ddm');
 v = await page.inputValue('input[data-k="take"]'); if (!/37°16\.740'N 127°02\.796'E/.test(v)) fail('형식 변경 반영: ' + v);
 await page.check('input[data-etc="P-518"]'); await page.fill('#br-etc-text', '연료보급');
 out = await page.inputValue('#br-out'); if (!out.includes('- 기타 : P-518, 연료보급')) fail('기타: ' + out);
+await page.check('input[data-route="아주대"]'); out = await page.inputValue('#br-out'); if (!out.includes('- 경로 : 아주대(의료진탑승)-목적지-아주대')) fail('경로 줄: ' + out);
+if (!(await page.locator("#br-types .chip[data-t=\"Heli-Ems\"]").count())) fail("Heli-Ems 항목 없음");
 await page.click('#br-copy'); const clip = await page.evaluate(() => navigator.clipboard.readText()); if (clip !== out) fail('복사 내용 불일치');
 await page.fill('input[data-k="give"]', '37.5, 127.0'); await page.press('input[data-k="give"]', 'Enter');
 if (!/\(37°30\.000'N 127°00\.000'E\)/.test(await page.inputValue('input[data-k="give"]'))) fail('좌표 직접 입력: ' + await page.inputValue('input[data-k="give"]'));

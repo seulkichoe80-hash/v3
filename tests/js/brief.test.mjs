@@ -42,7 +42,12 @@ test('요청 시·도: 앞글자+시간 → 소방본부(HH:MM)', () => {
 });
 test('갈래·제목', () => {
   assert.deepEqual(CATS.map((c) => c.name), ['화재', '구조', '구급', '기타']);
-  assert.deepEqual(CATS.flatMap((c) => c.items.map((i) => i[0])), ['산불', '공장화재', '기타화재', '산악구조', '건물구조', '수난구조', '수색구조', '환자이송', '병원 간 전원', '장기이송', '장비이송', '훈련비행', '정비이동']);
+  assert.deepEqual(CATS.flatMap((c) => c.items.map((i) => i[0])), ['산불', '공장화재', '기타화재', '산악구조', '건물구조', '수난구조', '수색구조', '환자이송', '병원 간 전원', 'Heli-Ems', '장기이송', '장비이송', '훈련비행', '정비이동']);
   for (const c of CATS) for (const [, id] of c.items) assert.ok(TEMPLATES.some((x) => x.id === id));
   assert.equal(titleOf('충북 충주', '산불'), '충북 충주 산불'); assert.equal(titleOf('', '산불'), '산불');
+});
+
+test('의료진 탑승 경로 줄', () => {
+  const t = buildBrief({ tpl: T('ems'), values: { req: 'x' }, routes: ['아주대', '의정부성모병원'], etcChecks: ['P-73'] });
+  assert.match(t, /- 경로 : 아주대\(의료진탑승\)-목적지-아주대\n- 경로 : 의정부성모병원\(의료진탑승\)-목적지-의정부성모병원\n- 기타 : P-73$/);
 });
