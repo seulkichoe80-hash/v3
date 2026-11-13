@@ -745,7 +745,7 @@ async function run() {
     const entry = { time: new Date().toISOString(), from: from.name, to: to.name, via: pts.slice(1, -1).map((p) => p.name).join(' / '), distanceKm: result.distanceKm, overall: result.overall };
     store.set(HIST_KEY, [entry, ...store.get(HIST_KEY, [])].slice(0, 5000));
     showHistoryCount();
-    if (state.usageShared) api('/api/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).then((r) => r.ok ? r.json() : null).then((d) => d && d.stats && showUsage(d.stats)).catch(() => {});
+    logUsage(entry);
     if (state.serverLog) api('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
   } catch (e) {
     $('run-msg').textContent = '오류: ' + e.message + ' — 하단 수동 확인 링크를 이용하세요.';
@@ -905,6 +905,11 @@ function setupSheets() {
 }
 function updateTabCounts() { /* 탭에는 개수를 표시하지 않음 */ }
 function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM`; }   // NOTAM 화면은 NM만 표시(km 병기 없음)
+// 누적 사용량 1건 기록(판단 실행·임무브리핑 복사)
+function logUsage(entry) {
+  if (!state.usageShared) return;
+  api('/api/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).then((r) => r.ok ? r.json() : null).then((d) => d && d.stats && showUsage(d.stats)).catch(() => {});
+}
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
 function downloadHistory() {
   const rows = store.get(HIST_KEY, []);
@@ -1224,7 +1229,7 @@ function setupBrief() {
     br.custom = false; refresh(); save();
   });
   $('br-out').addEventListener('input', () => { br.custom = true; });
-  $('br-copy').addEventListener('click', async () => { await copyText($('br-out').value); $('br-msg').textContent = '복사했습니다 — 메신저에 붙여넣으세요'; setTimeout(() => { $('br-msg').textContent = ''; }, 3000); });
+  $('br-copy').addEventListener('click', async () => { await copyText($('br-out').value); logUsage({ time: new Date().toISOString(), from: '임무브리핑', to: br.kind, via: $('br-region').value.trim(), distanceKm: null, overall: '' }); $('br-msg').textContent = '복사했습니다 — 메신저에 붙여넣으세요'; setTimeout(() => { $('br-msg').textContent = ''; }, 3000); });
   $('br-reset').addEventListener('click', () => { $('br-region').value = ''; build(); });
   build();
 }

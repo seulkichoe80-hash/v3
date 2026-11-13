@@ -19,7 +19,9 @@ for (let k = 1; k <= 2; k++) {
   if (k > 1) await page.waitForTimeout(1100);   // 같은 출발·목적지·초는 한 건으로 합쳐지므로 간격을 둠
   await page.click('#run'); await page.waitForFunction((n) => document.querySelector('#usage-total').textContent === String(n), k, { timeout: 10000 }).catch(() => fail(`${k}번째 실행 뒤 누적이 ${k}이 아님`));
 }
-if (!/오늘 2건/.test(await page.textContent('#usage-sub'))) fail('오늘 건수 표시 이상: ' + await page.textContent('#usage-sub'));
+await page.click('#sheet-tab-4'); await page.waitForTimeout(1100); await page.click('#br-copy');
+await page.waitForFunction(() => document.querySelector('#usage-total').textContent === '3', null, { timeout: 10000 }).catch(() => fail('임무브리핑 복사가 1건으로 누적되지 않음'));
+if (!/오늘 3건/.test(await page.textContent('#usage-sub'))) fail('오늘 건수 표시 이상: ' + await page.textContent('#usage-sub'));
 const csv = await (await fetch(`http://localhost:${PORT}/api/usage?format=csv`)).text();
-if (csv.trim().split('\n').length !== 3) fail('CSV 행 수 이상');
+if (csv.trim().split('\n').length !== 4) fail('CSV 행 수 이상');
 console.log('PASS usage'); await browser.close(); srv.kill();
