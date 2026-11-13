@@ -323,6 +323,6 @@ function buildReport(r, input) {
   if (w && w.windMs !== null) parts.push(`바람(목적지) ${dirText(w.windDir)} ${w.windMs}m/s(${w.windKt}kt)${w.gustMs ? ' 순간 ' + w.gustMs + 'm/s(' + w.gustKt + 'kt)' : ''}${w.trend ? ' ' + w.trend : ''}`);
   if (isNight) parts.push('제22조① 야간 조건 확인(착륙장 조명, 수색구조 시 야간투시경 등)');
   if (isSea) parts.push('제22조④ 해상 조건 확인(구명조끼·체온보호슈트·해상생환교육 등)');
-  parts.push('※ 조언용 참고자료이며 최종 판단은 통제관·기장');
+  parts.push('※ 조언용 참고자료입니다. 최종 결정은 출동 지휘 담당자(항공 통제관)와 조종사(기장)가 합니다');
   return parts.join(' | ');
 }

@@ -301,5 +301,5 @@ test('공역·NOTAM은 종합 판정에 넣지 않고 주의로 따로 모은다
 test('지점 행 출처에 관측소까지 거리, 보고문에 조언용 문구', () => {
   const r = evaluate(base());
   assert.match(r.rows.find((x) => x.segment === '출발지' && x.item === '시정').source, /METAR .+ · \d+km 거리/);
-  assert.match(r.reportText, /조언용 참고자료이며 최종 판단은 통제관·기장/);
+  assert.match(r.reportText, /조언용 참고자료입니다\. 최종 결정은 출동 지휘 담당자\(항공 통제관\)와 조종사\(기장\)가 합니다/);
 });

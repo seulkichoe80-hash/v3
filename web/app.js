@@ -870,7 +870,7 @@ function renderTransport(tp) {
   el.innerHTML = `<h3>출동 수단 비교 <small>(헬기 vs 구급차 · 목적지까지 소요시간)</small></h3><div class="tcols">${heli}${amb}</div>
     <div class="verdict ${tp.verdict}">${esc(tp.text)}</div>
     ${tp.caution.map((c) => `<p class="tnote">※ ${esc(c)}</p>`).join('')}
-    <p class="tnote">※ 헬기는 접수~이륙 준비 후 비행시간을 더한 값이며 착륙·환자 인계 시간은 포함하지 않습니다. 최종 판단은 통제관·기장이 합니다.</p>`;
+    <p class="tnote">※ 헬기는 접수~이륙 준비 후 비행시간을 더한 값이며 착륙·환자 인계 시간은 포함하지 않습니다. 최종 결정은 출동 지휘 담당자(항공 통제관)와 조종사(기장)가 합니다.</p>`;
 }
 // ---------- 구급차 이동시간(현장 → 병원) ----------
 state.amb = { from: null, to: null };
