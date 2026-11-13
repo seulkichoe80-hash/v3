@@ -395,12 +395,12 @@ details.faroff .n { opacity: .75; }
 /* ④ 임무브리핑 */
 .br-top { display: grid; grid-template-columns: 1fr 1.6fr auto; gap: 8px; margin: 8px 0; }
 .br-top label, .br-msg { display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 700; }
-.br-row { display: grid; grid-template-columns: 170px 1fr auto; gap: 8px; align-items: start; margin: 4px 0; }
+.br-row { display: grid; grid-template-columns: 190px 1fr; gap: 8px; align-items: start; margin: 4px 0; }
 .br-row > label { font-size: 13px; font-weight: 700; padding-top: 7px; }
 .br-in { position: relative; } .br-in input { width: 100%; box-sizing: border-box; }
 .br-etc { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 8px 0; }
 .br-msg textarea { width: 100%; box-sizing: border-box; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
-@media (max-width: 700px) { .br-top { grid-template-columns: 1fr; } .br-row { grid-template-columns: 1fr auto; } .br-row > label:first-child { grid-column: 1 / -1; } .br-row > label { padding-top: 0; } }
+@media (max-width: 700px) { .br-top { grid-template-columns: 1fr; } .br-row { grid-template-columns: 1fr; } .br-row > label { padding-top: 0; } }
 .br-sub { margin: 4px 0 2px; padding: 6px; background: #f3f7f4; border-radius: 8px; }
 .br-sub .chip { background: #fff; }
 .br-sub .chip.on { background: #1d6f42; color: #fff; }
@@ -409,3 +409,4 @@ details.faroff .n { opacity: .75; }
 .br-coord { margin-top: 4px; }
 .br-clr { font-size: 12.5px; padding-top: 8px; white-space: nowrap; cursor: pointer; }
 .br-row > .br-clr { font-weight: 600; }
+.br-lab input { margin-right: 4px; vertical-align: -2px; }
