@@ -403,5 +403,6 @@ details.faroff .n { opacity: .75; }
 @media (max-width: 700px) { .br-top { grid-template-columns: 1fr; } .br-row { grid-template-columns: 1fr; } .br-row > label { padding-top: 0; } }
 .br-sub { margin: 4px 0 2px; padding: 6px; background: #f3f7f4; border-radius: 8px; }
 .br-sub .chip { background: #fff; }
+.br-sub .chip.on { background: #1d6f42; color: #fff; }
 .br-title { margin: 4px 0 8px; font-weight: 800; color: #1d6f42; }
 .br-row input.bad { border-color: #c0392b; }
