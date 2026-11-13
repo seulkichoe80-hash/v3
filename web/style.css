@@ -18,7 +18,7 @@ small { color: var(--muted); font-weight: 400; }
 .top p { margin: 0; font-size: 12px; color: #b9c6d3; }
 .clock { font: 600 15px var(--mono); color: #dfe8f1; white-space: nowrap; }
 
-.layout { display: grid; grid-template-columns: 430px minmax(0, 1fr) 460px; gap: 12px; padding: 12px; min-height: calc(100vh - 110px); }
+.layout { display: grid; grid-template-columns: 470px minmax(0, 1fr) 580px; gap: 12px; padding: 12px; min-height: calc(100vh - 110px); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
 .panel h2 { font-size: 15px; margin-bottom: 10px; }
 .panel h3 { font-size: 13px; margin: 16px 0 6px; color: #2c3a47; }
@@ -105,8 +105,8 @@ tr.RED td { background: #fff7f6; }
 .pin { padding: 2px 6px; border-radius: 4px; background: #0d2236; color: #fff; font-size: 11px; font-weight: 700; white-space: nowrap; transform: translateY(-14px); }
 .bolt { color: #c4231a; font-weight: 900; font-size: 13px; }
 
-@media (max-width: 1280px) {
-  .layout { grid-template-columns: 430px minmax(0, 1fr); }
+@media (max-width: 1560px) {
+  .layout { grid-template-columns: 470px minmax(0, 1fr); }
   .result { grid-column: 1 / -1; max-height: none; }
 }
 @media (max-width: 760px) {
