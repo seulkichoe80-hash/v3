@@ -34,6 +34,13 @@ if (!(await page.locator("#br-types .chip[data-t=\"Heli-Ems\"]").count())) fail(
 await page.click('#br-copy'); const clip = await page.evaluate(() => navigator.clipboard.readText()); if (clip !== out) fail('복사 내용 불일치');
 await page.fill('input[data-k="give"]', '37.5, 127.0'); await page.press('input[data-k="give"]', 'Enter');
 if (!/\(37°30\.000'N 127°00\.000'E\)/.test(await page.inputValue('input[data-k="give"]'))) fail('좌표 직접 입력: ' + await page.inputValue('input[data-k="give"]'));
+await page.click('#br-cats .chip[data-c="1"]'); await page.click('#br-types .chip[data-t="산악구조"]');
+await page.fill('input[data-ck="place"]', '37.5583, 126.7906'); await page.press('input[data-ck="place"]', 'Enter');
+v = await page.inputValue('input[data-k="place"]'); if (!/지정 좌표\(37°33\.498'N 126°47\.436'E\)/.test(v)) fail('좌표 입력 → 구조 장소: ' + v);
+if (!(await page.inputValue('#br-out')).includes('- 구조 장소(좌표) : ' + v)) fail('전송문에 구조 장소');
+await page.check('input[data-clr="place"]');
+if ((await page.inputValue('input[data-k="place"]')) !== '' || (await page.inputValue('input[data-ck="place"]')) !== '' || (await page.inputValue('#br-out')).includes('구조 장소')) fail('네모칸으로 지우기');
+await page.fill('input[data-ck="place"]', 'abc'); await page.press('input[data-ck="place"]', 'Enter'); if (!(await page.locator('input[data-ck="place"].bad').count())) fail('잘못된 좌표 표시');
 await page.reload(); await page.waitForSelector('#map-off:not([hidden])'); await page.click('#sheet-tab-4');
 if ((await page.inputValue('#br-unit')) !== '' || (await page.inputValue('#br-region')) !== '') fail('새로고침하면 초기화되어야 함');
 await page.click('#sheet-tab-1'); if (!(await page.isVisible('#run'))) fail('①에서 판단 실행 보여야 함');

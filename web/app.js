@@ -1199,7 +1199,8 @@ function setupBrief() {
     drawTypes(); br.values = {}; br.etc = new Set(); br.routes = new Set(); br.etcText = ''; br.custom = false; br.places = {};
     $('br-fields').innerHTML = br.tpl.fields.map((f) => `<div class="br-row"><label>${esc(f.label)}</label><div class="br-in">`
       + `<input type="text" data-k="${f.k}" placeholder="${esc(f.type === 'place' ? '장소·주소 검색 → 좌표 자동 입력' : f.ph)}" autocomplete="off">`
-      + (f.type === 'place' ? `<ul class="results" data-r="${f.k}"></ul>` : '') + '</div></div>').join('');
+      + (f.type === 'place' ? `<ul class="results" data-r="${f.k}"></ul><input type="text" class="br-coord" data-ck="${f.k}" placeholder="좌표 입력 → 주소·좌표 자동 (예: 37.5583, 126.7906)" autocomplete="off">` : '')
+      + `</div><label class="br-clr" title="이 칸 지우기"><input type="checkbox" data-clr="${f.k}"> 지움</label></div>`).join('');
     $('br-etc').innerHTML = '<b>기타</b> ' + ETC_CHECKS.map((c) => `<label class="inline"><input type="checkbox" data-etc="${esc(c)}"> ${esc(c)}</label>`).join(' ')
       + ' · ' + ROUTE_HOSPS.map((c) => `<label class="inline"><input type="checkbox" data-route="${esc(c)}"> ${esc(c)}</label>`).join(' ')
       + ' <input type="text" id="br-etc-text" placeholder="직접 입력" autocomplete="off">';
@@ -1212,9 +1213,30 @@ function setupBrief() {
       }
       if (f.type === 'place') {
         const ul = $('br-fields').querySelector(`ul[data-r="${f.k}"]`);
-        searchBox(inp, ul, (pl) => { inp.value = composeLoc(pl, $('br-fmt').value); br.values[f.k] = inp.value; br.places[f.k] = pl; br.custom = false; refresh(); });
+        const put = (pl) => { inp.value = composeLoc(pl, $('br-fmt').value); br.values[f.k] = inp.value; br.places[f.k] = pl; br.custom = false; refresh(); };
+        searchBox(inp, ul, put);
+        const ci = $('br-fields').querySelector(`input[data-ck="${f.k}"]`);   // 좌표를 직접 입력하면 주소를 찾아 "주소(좌표)"로
+        const fromCoord = () => {
+          const txt = ci.value.trim(); if (!txt) return;
+          let c = parseCoord(txt, $('br-fmt').value);
+          if (c.error) for (const m of ['dd', 'ddm', 'dms']) { c = parseCoord(txt, m); if (!c.error) break; }
+          ci.classList.toggle('bad', !!c.error);
+          if (c.error || !Number.isFinite(c.lat)) return;
+          const done = (addr) => put({ name: addr ? '' : '지정 좌표', addr, lat: c.lat, lon: c.lon });
+          if (state.geocoder && state.kakao) {
+            let fin = false; const t = setTimeout(() => { if (!fin) { fin = true; done(''); } }, 3000);
+            try { state.geocoder.coord2Address(c.lon, c.lat, (res, st) => { if (fin) return; fin = true; clearTimeout(t); done(st === state.kakao.services.Status.OK && res[0] ? (res[0].road_address || res[0].address).address_name : ''); }); } catch { fin = true; clearTimeout(t); done(''); }
+          } else done('');
+        };
+        ci.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); fromCoord(); } });
+        ci.addEventListener('change', fromCoord);
       }
     });
+    $('br-fields').querySelectorAll('input[data-clr]').forEach((c) => c.addEventListener('change', () => {   // 네모칸을 누르면 그 칸이 지워짐(체크는 곧 해제)
+      const k = c.dataset.clr; br.values[k] = ''; delete br.places[k];
+      $('br-fields').querySelectorAll(`input[data-k="${k}"], input[data-ck="${k}"]`).forEach((i) => { i.value = ''; i.classList.remove('bad'); });
+      br.custom = false; refresh(); setTimeout(() => { c.checked = false; }, 250);
+    }));
     $('br-etc').querySelectorAll('input[data-etc]').forEach((c) => c.addEventListener('change', () => { c.checked ? br.etc.add(c.dataset.etc) : br.etc.delete(c.dataset.etc); br.custom = false; refresh(); }));
     $('br-etc').querySelectorAll('input[data-route]').forEach((c) => c.addEventListener('change', () => { c.checked ? br.routes.add(c.dataset.route) : br.routes.delete(c.dataset.route); br.custom = false; refresh(); }));
     $('br-etc-text').addEventListener('input', (e) => { br.etcText = e.target.value; br.custom = false; refresh(); });
