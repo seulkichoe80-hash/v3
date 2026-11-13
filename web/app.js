@@ -901,7 +901,7 @@ function setupSheets() {
   showSheet(['1', '2', '3'].includes(n) ? n : '1');
 }
 function updateTabCounts() { /* 탭에는 개수를 표시하지 않음 */ }
-function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM (${(nm * 1.852).toFixed(1)}km)`; }
+function fmtNm(nm) { return nm == null ? '-' : `${+(+nm).toFixed(1)}NM`; }   // NOTAM 화면은 NM만 표시(km 병기 없음)
 function showHistoryCount() { $('history-count').textContent = `(이 브라우저 ${store.get(HIST_KEY, []).length}건)`; }
 function downloadHistory() {
   const rows = store.get(HIST_KEY, []);

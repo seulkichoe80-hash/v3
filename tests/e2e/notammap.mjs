@@ -59,10 +59,13 @@ const buf = rec.find((x) => x.name === 'Circle' && x.c === '#ff8f00');
 const core = rec.find((x) => x.name === 'Circle' && x.c === '#d6201a');
 if (!buf || !core || Math.abs(buf.r - core.r - 5 * 1852) > 1) fail('근접 경고권(버퍼) 원이 NOTAM 반경+5NM이 아님: ' + JSON.stringify({ core: core && core.r, buf: buf && buf.r }));
 const circle = rec.find((x) => x.name === 'Circle' && x.c === '#d6201a');
+const lab0 = rec.find((x) => x.name === 'CustomOverlay' && /nt-label/.test(x.html || ''));
+if (lab0 && /km/.test(lab0.html)) fail('NOTAM 지도 라벨에 km가 표시됨: ' + lab0.html);
 if (!circle || !(circle.r > 0)) fail('빨간 NOTAM 원이 안 그려짐: ' + JSON.stringify(rec.filter((x) => x.name === 'Circle')));
 const label = rec.find((x) => x.name === 'CustomOverlay' && /nt-label/.test(x.html || ''));
 if (!label || !/\d+\/\d+ \d\d:\d\d ~ .*KST/.test(label.html)) fail('라벨에 유효시간이 없음: ' + (label && label.html));
 if (!label || !/D2840\/26/.test(label.html) || !/반경 [\d.]+NM/.test(label.html) || !/\d/.test(label.html.split('<br>')[1] || '')) fail('좌표·반경 라벨 이상: ' + (label && label.html));
+if (/\d\s*km/.test(await page.textContent('#notam-list'))) fail('항공고시보 목록에 km가 표시됨');
 if (!/📍/.test(await page.textContent('#notam-list')) || !/반경 [\d.]+NM/.test(await page.textContent('#notam-list'))) fail('목록에 좌표·반경 줄 없음');
 // ③ 판단 실행 후에는 지도를 눌러도 출발·목적지가 바뀌지 않는다
 if (await page.isChecked('#map-click-on')) fail('판단 실행 후 지도 클릭 지정이 꺼져 있어야 함');
