@@ -36,7 +36,7 @@ await page.fill('input[data-k="give"]', '37.5, 127.0'); await page.press('input[
 if (!/\(37°30\.000'N 127°00\.000'E\)/.test(await page.inputValue('input[data-k="give"]'))) fail('좌표 직접 입력: ' + await page.inputValue('input[data-k="give"]'));
 await page.click('#br-cats .chip[data-c="1"]'); await page.click('#br-types .chip[data-t="산악구조"]');
 await page.fill('input[data-ck="place"]', '37.5583, 126.7906'); await page.press('input[data-ck="place"]', 'Enter');
-v = await page.inputValue('input[data-k="place"]'); if (!/지정 좌표\(37°33\.498'N 126°47\.436'E\)/.test(v)) fail('좌표 입력 → 구조 장소: ' + v);
+v = await page.inputValue('input[data-k="place"]'); if (!/현장 좌표\(37°33\.498'N 126°47\.436'E\)/.test(v)) fail('좌표 입력 → 구조 장소: ' + v);
 if (!(await page.inputValue('#br-out')).includes('- 구조 장소(좌표) : ' + v)) fail('전송문에 구조 장소');
 await page.check('input[data-clr="place"]');
 if ((await page.inputValue('input[data-k="place"]')) !== '' || (await page.inputValue('input[data-ck="place"]')) !== '' || (await page.inputValue('#br-out')).includes('구조 장소')) fail('네모칸으로 지우기');

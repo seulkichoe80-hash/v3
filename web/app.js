@@ -1219,7 +1219,7 @@ function setupBrief() {
         const put = (pl) => { inp.value = composeLoc(pl, $('br-fmt').value); br.values[f.k] = inp.value; br.places[f.k] = pl; br.custom = false; refresh(); };
         // 좌표만 알 때는 카카오로 주소를 찾아 "주소(좌표)"로 만든다(못 찾으면 좌표만)
         const withAddr = (lat, lon) => {
-          const done = (addr) => put({ name: addr ? '' : '지정 좌표', addr, lat, lon });
+          const done = (addr) => put({ name: addr ? '' : '현장 좌표', addr, lat, lon });
           if (!(state.geocoder && state.kakao)) return done('');
           let fin = false; const t = setTimeout(() => { if (!fin) { fin = true; done(''); } }, 3000);
           try { state.geocoder.coord2Address(lon, lat, (res, st) => { if (fin) return; fin = true; clearTimeout(t); done(st === state.kakao.services.Status.OK && res[0] ? (res[0].road_address || res[0].address).address_name : ''); }); } catch { fin = true; clearTimeout(t); done(''); }
